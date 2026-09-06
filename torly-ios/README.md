@@ -32,7 +32,7 @@
 
 Для iPhone Simulator Apple Developer Team не нужен: проект подписывается локально.
 
-Если запускаешь на реальном iPhone, в Xcode открой target `Torly` -> `Signing & Capabilities` и выбери свой Apple Team. Без этого Apple не даст поставить приложение на физический iPhone. Для первой проверки проще выбрать именно iPhone Simulator.
+Для реального iPhone в проекте уже выбрана команда `Aleksandr Podgaets` и включена автоматическая подпись. В Xcode должен быть выполнен вход в соответствующий Apple Developer аккаунт. При запуске на другом аккаунте замени Team в `Signing & Capabilities`.
 
 Название на домашнем экране: `Torly`.
 Bundle id: `app.torly.mvp`.
