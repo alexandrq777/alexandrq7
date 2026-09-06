@@ -1,0 +1,14 @@
+{$API_DOMAIN} {
+  encode zstd gzip
+  request_body {
+    max_size 64KB
+  }
+  header {
+    Strict-Transport-Security "max-age=31536000"
+    X-Content-Type-Options nosniff
+    -Server
+  }
+  reverse_proxy api:3100 {
+    flush_interval -1
+  }
+}

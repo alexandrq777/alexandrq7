@@ -1,13 +1,25 @@
 {
   "name": "torly-api",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "PORT=3100 node server.js"
+    "dev": "node --env-file=.env server.js",
+    "migrate": "node migrate.js",
+    "provision": "node provision.js",
+    "test": "node --test test/*.test.js"
   },
   "engines": {
-    "node": ">=18"
-  }
+    "node": ">=22"
+  },
+  "dependencies": {
+    "pg": "^8.16.3",
+    "luxon": "^3.7.2",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.10"
+  },
+  "packageManager": "pnpm@10.17.1"
 }

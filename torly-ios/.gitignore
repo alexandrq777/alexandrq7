@@ -4,3 +4,9 @@ DerivedData/
 .derived*/
 *.xcuserstate
 xcuserdata/
+node_modules/
+.env
+.env.*
+!.env.example
+*.private.json
+backups/

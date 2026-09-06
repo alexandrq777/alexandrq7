@@ -1,0 +1,21 @@
+{
+  "email": "owner@example.com",
+  "password": "replace-with-a-long-random-password",
+  "business": {
+    "name": "Example studio",
+    "slug": "example-studio",
+    "phone": "+972500000000",
+    "address": "Example address",
+    "categoryId": "skin-care",
+    "timezone": "Asia/Jerusalem",
+    "staffName": "Owner"
+  },
+  "services": ["Consultation"],
+  "hours": [
+    {"weekday": 0, "opensAt": "07:00", "closesAt": "15:00"},
+    {"weekday": 1, "opensAt": "07:00", "closesAt": "15:00"},
+    {"weekday": 2, "opensAt": "07:00", "closesAt": "15:00"},
+    {"weekday": 3, "opensAt": "07:00", "closesAt": "15:00"},
+    {"weekday": 4, "opensAt": "07:00", "closesAt": "15:00"}
+  ]
+}

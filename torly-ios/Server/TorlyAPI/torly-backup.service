@@ -1,0 +1,10 @@
+[Unit]
+Description=Torly PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/torly
+ExecStart=/bin/sh /opt/torly/backup.sh
+UMask=0077

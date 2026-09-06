@@ -36,6 +36,7 @@ struct ContentView: View {
 
 struct LoginScreen: View {
     let onSignIn: () -> Void
+    @State private var showLiveBusiness = false
 
     var body: some View {
         NavigationStack {
@@ -43,7 +44,7 @@ struct LoginScreen: View {
                 Spacer()
 
                 VStack(spacing: 14) {
-                    Image("Torly-AppIcon-1024")
+                    Image(uiImage: UIImage(contentsOfFile: Bundle.main.path(forResource: "Torly-AppIcon-1024", ofType: "png") ?? "") ?? UIImage())
                         .resizable()
                         .scaledToFit()
                         .frame(width: 104, height: 104)
@@ -58,9 +59,8 @@ struct LoginScreen: View {
                 }
 
                 VStack(spacing: 12) {
-                    SignInButton(title: "Войти через Apple", systemImage: "apple.logo", action: onSignIn)
-                    SignInButton(title: "Войти через Google", systemImage: "g.circle", action: onSignIn)
-                    SignInButton(title: "Войти по телефону", systemImage: "phone", action: onSignIn)
+                    SignInButton(title: "Войти в бизнес", systemImage: "person.crop.circle") { showLiveBusiness = true }
+                    SignInButton(title: "Посмотреть демо", systemImage: "play.circle", action: onSignIn)
                 }
 
                 Text("Один аккаунт может быть и бизнесом, и клиентом.")
@@ -71,6 +71,7 @@ struct LoginScreen: View {
             }
             .padding(24)
             .background(Color(.systemGroupedBackground))
+            .fullScreenCover(isPresented: $showLiveBusiness) { LiveBusinessView() }
         }
     }
 }

@@ -1,47 +1,56 @@
-# Torly API
+# Torly API 0.2
 
-Чистый backend-скелет для Torly на Node.js без зависимостей.
+Node.js 22 + PostgreSQL 17 + Caddy. Native iPhone client in `../../TorBooking`.
+Replaces the earlier in-memory demonstration API. No legacy `/api/*` endpoint
+is exposed without authentication.
 
-Он взят по идее запуска старого scanner-сервера, но очищен от scanner/OpenAI/audio-логики. Сейчас данные живут в памяти, завтра их можно заменить на Supabase/Postgres.
+## Development
 
-## Продуктовая стратегия
-
-Torly остается легким аналогом Calmark: первые 2 месяца бесплатно, затем основной тариф ₪49/месяц. Внутри API сразу заложены международные настройки, чтобы позже выйти за Израиль без переписывания продукта:
-
-- языки: `en` и `he`;
-- валюты: `ILS`, `USD`, `EUR`, `GBP`;
-- страны: Израиль, США, Великобритания, Германия, Франция, Испания;
-- часовые пояса в формате IANA;
-- WhatsApp templates для Hebrew и English;
-- Stripe-ready поля для будущей подписки;
-- телефоны в E.164.
-
-## Запуск
-
-```bash
-npm start
+```sh
+pnpm install --frozen-lockfile
+pnpm test
 ```
 
-По умолчанию сервер слушает `http://127.0.0.1:3100`.
+Tests execute the real schema and HTTP routes using PGlite with btree_gist. A real
+PostgreSQL server is still required to verify concurrent connections and SSE.
+For a local PostgreSQL instance set `DATABASE_URL`, then run `pnpm migrate` and
+`pnpm start`. The API listens on localhost:3100 outside Compose.
 
-## Основные endpoints
+## HTTP contract
 
-- `GET /health`
-- `GET /api/bootstrap` - тариф, страны, валюты, языки, WhatsApp-шаблоны, payment config
-- `GET /api/businesses`
-- `GET /api/businesses/:slug`
-- `GET /api/businesses/:slug/availability?month=2026-09`
-- `POST /api/bookings`
-- `GET /api/owner/dashboard?businessId=biz_barber_dizengoff`
-- `PUT /api/owner/settings`
+All private requests use `Authorization: Bearer <session token>`.
+JSON uses snake_case in database responses and camelCase in mutation inputs.
 
-## Ближайший план
+- `GET /health`: database readiness.
+- `POST /v1/session`: `{email,password}` -> `{token}`; expires after seven days.
+- `DELETE /v1/session`: revoke the current session.
+- `GET /v1/categories`: extensible business categories, Hebrew/English.
+- `GET /v1/public/:slug`: published business profile, no private client fields.
+- `GET /v1/owner`: owned businesses, services, staff, working hours.
+- `GET /v1/bookings?businessId=UUID&from=ISO&to=ISO`: up to 32 days.
+- `GET /v1/availability?businessId=UUID&staffId=UUID&serviceId=UUID&date=YYYY-MM-DD`:
+  free start instants in UTC, calculated in the business timezone.
+- `POST /v1/bookings`: `{businessId,staffId,serviceId,startsAt,clientName,clientPhone,requestKey}`.
+  `requestKey` is a UUID retained across retries of the same request.
+- `PATCH /v1/bookings/:id`: `{revision,status}` or `{revision,startsAt}`.
+- `PUT /v1/services/:id`: `{name,priceMinor,minutes}`; activates a configured service.
+- `PUT /v1/staff/:id/hours`: array of `{weekday,opensAt,closesAt}`; 0=Sunday.
+  Omitted days are closed. Changes affect future availability; existing appointments remain.
+- `GET /v1/events`: authenticated SSE; calendar events trigger a client refetch.
 
-- подключить Supabase Auth;
-- перенести массивы в таблицы Postgres;
-- добавить RLS: владелец видит свой бизнес, клиент видит свои записи;
-- добавить хранение `country_code`, `currency`, `locale`, `timezone`, `phone_e164`;
-- добавить realtime-канал календаря;
-- добавить WhatsApp reminder worker;
-- подключить iPhone-приложение к API;
-- подготовить production deploy.
+Errors: 400 validation, 401 session, 404 inaccessible resource, 409 conflict,
+429 login throttling, 500 unavailable. Unauthenticated writes and arbitrary
+owner IDs from callers are not supported. All SQL parameters are bound.
+
+## Deploy and limits
+
+Follow `DEPLOY.md` and `../../Docs/server-architecture.md`. Real accounts are
+created with `provision.js`, using a local ignored `*.private.json` file.
+
+The prototype supports provisioned owners only. Self-service sign-up, public
+booking writes, provider logins, payments, WhatsApp/APNs delivery, waitlist,
+reviews and forms are not yet connected. Notification jobs are explicitly disabled.
+The plan metadata is ILS 39/month; subscription collection is not active.
+
+`nginx-torly-api.conf` and `torly-api.service` belong to the old in-memory starter.
+Use Compose/Caddy for this version; do not install both configurations.

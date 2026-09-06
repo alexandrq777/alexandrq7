@@ -1,0 +1,61 @@
+name: torly
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: torly
+      POSTGRES_USER: torly
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a database password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U torly -d torly"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [internal]
+  migrate:
+    build: .
+    command: [node, migrate.js]
+    environment:
+      DATABASE_URL: postgresql://torly:${POSTGRES_PASSWORD}@db:5432/torly
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+  api:
+    build: .
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    environment:
+      DATABASE_URL: postgresql://torly:${POSTGRES_PASSWORD}@db:5432/torly
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [internal]
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?Set a domain pointed at this server}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_healthy }
+    networks: [internal, public]
+networks:
+  internal: { internal: true }
+  public: {}
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

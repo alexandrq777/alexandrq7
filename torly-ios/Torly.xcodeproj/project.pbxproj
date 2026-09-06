@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        9C0000042C88C00100000001 /* LiveBusinessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C00001A2C88C00100000001; };
 		9C0000012C88C00100000001 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0000112C88C00100000001 /* App.swift */; };
 		9C0000022C88C00100000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0000122C88C00100000001 /* ContentView.swift */; };
 		9C0000032C88C00100000001 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0000132C88C00100000001 /* Models.swift */; };
@@ -16,6 +17,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        9C00001A2C88C00100000001 /* LiveBusinessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveBusinessView.swift; sourceTree = "<group>"; };
 		9C0000102C88C00100000001 /* Torly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Torly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9C0000112C88C00100000001 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		9C0000122C88C00100000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -52,6 +54,7 @@
 				9C0000112C88C00100000001 /* App.swift */,
 				9C0000122C88C00100000001 /* ContentView.swift */,
 				9C0000132C88C00100000001 /* Models.swift */,
+                9C00001A2C88C00100000001 /* LiveBusinessView.swift */,
 				9C0000192C88C00100000001 /* Info.plist */,
 				9C0000142C88C00100000001 /* Assets.xcassets */,
 				9C0000152C88C00100000001 /* AppIcons */,
@@ -151,6 +154,7 @@
 				9C0000012C88C00100000001 /* App.swift in Sources */,
 				9C0000022C88C00100000001 /* ContentView.swift in Sources */,
 				9C0000032C88C00100000001 /* Models.swift in Sources */,
+                9C0000042C88C00100000001 /* LiveBusinessView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

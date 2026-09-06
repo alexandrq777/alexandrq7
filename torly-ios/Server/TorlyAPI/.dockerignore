@@ -1,0 +1,6 @@
+.env*
+*.private.json
+node_modules
+test
+backups
+.git
