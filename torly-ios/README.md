@@ -1,5 +1,29 @@
-# Torly iPhone App
+# Torly
 
-Native SwiftUI/Xcode scaffold for Torly, a SaaS online booking app for small businesses.
+Чистое iPhone-приложение на SwiftUI для MVP онлайн-записи.
 
-Open `Torly-iPhone-Xcode-App-SaaS-Scaffold.zip`, extract it, then open `Torly.xcodeproj` in Xcode.
+Что уже есть в прототипе:
+
+- вход через Apple / Google / телефон как экранный сценарий;
+- выбор роли: бизнес, клиент или один аккаунт с двумя ролями;
+- кабинет бизнеса с публичной ссылкой, метриками и ближайшими записями;
+- месячный календарь бизнеса с занятыми и свободными слотами;
+- настройки услуг, цен, длительности, рабочих часов, сотрудников, перерывов и отпусков;
+- карточки клиентов, no-show пометки, лист ожидания, базовая аналитика и тарифы;
+- WhatsApp utility reminders: 500 включено в тариф, пакеты сверху с учетом себестоимости;
+- отзывы, формы/анкеты, push-уведомления и Google / Apple Calendar как экранный каркас;
+- клиентский сценарий: выбрать мастера, услугу, день в месяце и свободный час.
+
+Как открыть:
+
+1. Открой `Torly.xcodeproj` в Xcode.
+2. Выбери схему `Torly`.
+3. Выбери устройство `iPhone Simulator`, например iPhone 16.
+4. Нажми Run.
+
+Для iPhone Simulator Apple Developer Team не нужен: проект подписывается локально.
+
+Если запускаешь на реальном iPhone, в Xcode открой target `Torly` -> `Signing & Capabilities` и выбери свой Apple Team. Без этого Apple не даст поставить приложение на физический iPhone. Для первой проверки проще выбрать именно iPhone Simulator.
+
+Название на домашнем экране: `Torly`.
+Bundle id: `app.torly.mvp`.

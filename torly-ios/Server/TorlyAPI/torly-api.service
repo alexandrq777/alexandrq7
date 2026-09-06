@@ -1,0 +1,16 @@
+[Unit]
+Description=Torly API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/torly-api
+EnvironmentFile=/etc/torly-api.env
+ExecStart=/usr/bin/node /opt/torly-api/server.js
+Restart=always
+RestartSec=3
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
