@@ -12,6 +12,8 @@ export const iso = z.iso.datetime({ offset: true });
 export const serviceInput = z.object({ name: text, priceMinor: z.number().int().min(0).max(100000000), minutes: z.number().int().min(5).max(480) });
 export const bookingInput = z.object({ businessId: uuid, staffId: uuid, serviceId: uuid, startsAt: iso, clientName: text, clientPhone: phone, requestKey: uuid });
 export const hoursInput = z.array(z.object({ weekday: z.number().int().min(0).max(6), opensAt: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), closesAt: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/) }).refine(day => day.opensAt < day.closesAt)).max(7).refine(days => new Set(days.map(d => d.weekday)).size === days.length);
+export const businessInput = z.object({ name: text, phone, address: text, categoryId: text, timezone,
+  currency: z.enum(['ILS','USD','EUR','GBP']), locale: z.enum(['he','en']), country: z.enum(['IL','US','GB','DE','FR','ES']) });
 
 export class APIError extends Error {
   constructor(status, message) { super(message); this.status = status; }

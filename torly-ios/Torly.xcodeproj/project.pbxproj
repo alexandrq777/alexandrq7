@@ -10,7 +10,6 @@
         9C0000042C88C00100000001 /* LiveBusinessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C00001A2C88C00100000001; };
 		9C0000012C88C00100000001 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0000112C88C00100000001 /* App.swift */; };
 		9C0000022C88C00100000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0000122C88C00100000001 /* ContentView.swift */; };
-		9C0000032C88C00100000001 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0000132C88C00100000001 /* Models.swift */; };
 		9C0000062C88C00100000001 /* Torly-AppIcon-60@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 9C0000162C88C00100000001 /* Torly-AppIcon-60@2x.png */; };
 		9C0000072C88C00100000001 /* Torly-AppIcon-60@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 9C0000172C88C00100000001 /* Torly-AppIcon-60@3x.png */; };
 		9C0000082C88C00100000001 /* Torly-AppIcon-1024.png in Resources */ = {isa = PBXBuildFile; fileRef = 9C0000182C88C00100000001 /* Torly-AppIcon-1024.png */; };
@@ -21,7 +20,6 @@
 		9C0000102C88C00100000001 /* Torly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Torly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9C0000112C88C00100000001 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		9C0000122C88C00100000001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		9C0000132C88C00100000001 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		9C0000142C88C00100000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9C0000192C88C00100000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		9C0000162C88C00100000001 /* Torly-AppIcon-60@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Torly-AppIcon-60@2x.png"; sourceTree = "<group>"; };
@@ -53,7 +51,6 @@
 			children = (
 				9C0000112C88C00100000001 /* App.swift */,
 				9C0000122C88C00100000001 /* ContentView.swift */,
-				9C0000132C88C00100000001 /* Models.swift */,
                 9C00001A2C88C00100000001 /* LiveBusinessView.swift */,
 				9C0000192C88C00100000001 /* Info.plist */,
 				9C0000142C88C00100000001 /* Assets.xcassets */,
@@ -153,7 +150,6 @@
 			files = (
 				9C0000012C88C00100000001 /* App.swift in Sources */,
 				9C0000022C88C00100000001 /* ContentView.swift in Sources */,
-				9C0000032C88C00100000001 /* Models.swift in Sources */,
                 9C0000042C88C00100000001 /* LiveBusinessView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

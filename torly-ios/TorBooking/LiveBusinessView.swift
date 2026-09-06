@@ -28,6 +28,9 @@ struct RemoteBusiness: Decodable, Identifiable {
     let phone: String
     let timezone: String
     let currency: String
+    let categoryId: String
+    let country: String
+    let locale: String
     let services: [RemoteService]
     let staff: [RemoteStaff]
     let hours: [RemoteHours]
@@ -40,8 +43,11 @@ struct RemoteBooking: Decodable, Identifiable {
     let clientName: String?
     let serviceName: String?
     let staffName: String
+    let staffId: String
     let status: String
     let revision: Int
+    let kind: String
+    let priceMinor: Int?
 
     var statusTitle: String {
         ["pending": "Ожидает подтверждения", "confirmed": "Подтверждено", "cancelled": "Отменено", "completed": "Завершено", "no_show": "Не пришёл"][status] ?? status
@@ -53,6 +59,21 @@ private struct BookingResponse: Decodable { let bookings: [RemoteBooking] }
 private struct SlotResponse: Decodable { let slots: [String] }
 private struct SessionResponse: Decodable { let token: String }
 private struct APIMessage: Decodable { let error: String? }
+struct RemoteCategory: Decodable, Identifiable {
+    let id: String
+    let nameEn: String
+    let nameHe: String
+}
+struct RemoteClient: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let phone: String
+    let note: String
+    let noShowCount: Int
+    let visits: Int
+}
+private struct CategoryResponse: Decodable { let categories: [RemoteCategory] }
+private struct ClientResponse: Decodable { let clients: [RemoteClient] }
 
 private enum SessionKeychain {
     static func query(_ account: String) -> [String: Any] {
@@ -93,6 +114,9 @@ final class LiveBusinessStore: ObservableObject {
     @Published var busy = false
     @Published var error: String?
     @Published var connected = false
+    @Published var loaded = false
+    @Published var clients: [RemoteClient] = []
+    @Published var categories: [RemoteCategory] = []
     private var token: String?
     private var baseURL: URL?
     private var streamTask: Task<Void, Never>?
@@ -139,11 +163,11 @@ final class LiveBusinessStore: ObservableObject {
         return data
     }
 
-    func signIn(email: String, password: String) async {
+    func signIn(email: String, password: String, registering: Bool = false) async {
         await perform {
             self.clearSession()
             try self.configure()
-            let data = try await self.request("/v1/session", method: "POST", body: ["email": email, "password": password])
+            let data = try await self.request(registering ? "/v1/accounts" : "/v1/session", method: "POST", body: ["email": email.trimmingCharacters(in: .whitespacesAndNewlines), "password": password])
             let session = try self.decoder.decode(SessionResponse.self, from: data)
             try SessionKeychain.save(session.token, account: self.serverAddress)
             self.token = session.token
@@ -175,6 +199,8 @@ final class LiveBusinessStore: ObservableObject {
         connected = false
         businesses = []
         bookings = []
+        clients = []
+        loaded = false
     }
 
     func signOut() async {
@@ -191,6 +217,21 @@ final class LiveBusinessStore: ObservableObject {
             selectedBusinessId = businesses.first?.id ?? ""
         }
         try await loadBookings()
+        try await loadClients()
+        loaded = true
+    }
+
+    func loadClients() async throws {
+        guard let business else { clients = []; return }
+        let selected = business.id
+        let data = try await request("/v1/clients?businessId=\(selected)")
+        if selected == selectedBusinessId {
+            clients = try decoder.decode(ClientResponse.self, from: data).clients
+        }
+    }
+
+    func loadCategories() async throws {
+        categories = try decoder.decode(CategoryResponse.self, from: await request("/v1/categories")).categories
     }
 
     func loadBookings() async throws {
@@ -223,7 +264,7 @@ final class LiveBusinessStore: ObservableObject {
     func update(_ booking: RemoteBooking, status: String) async {
         await perform {
             _ = try await self.request("/v1/bookings/\(booking.id)", method: "PATCH", body: ["revision": booking.revision, "status": status])
-            try await self.loadBookings()
+            try await self.reload()
         }
     }
 
@@ -283,133 +324,19 @@ final class LiveBusinessStore: ObservableObject {
 }
 
 struct LiveBusinessView: View {
-    @StateObject private var store = LiveBusinessStore()
-    @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.dismiss) private var dismiss
-    @State private var email = ""
-    @State private var password = ""
-    @State private var showBooking = false
-    @State private var editingService: RemoteService?
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if store.signedIn { ownerContent }
-                else {
-                    Form {
-                        Section("Подключение") {
-                            TextField("https://api.example.com", text: $store.serverAddress)
-                                .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                            TextField("Email", text: $email).keyboardType(.emailAddress).textContentType(.username)
-                                .textInputAutocapitalization(.never).autocorrectionDisabled()
-                            SecureField("Пароль", text: $password).textContentType(.password)
-                            Button("Войти") {
-                                Task { await store.signIn(email: email, password: password); if store.signedIn { password = "" } }
-                            }.disabled(store.busy || email.isEmpty || password.isEmpty)
-                        }
-                    }
-                }
-            }
-            .navigationTitle(store.business?.name ?? "Torly")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button { store.setActive(false); dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Закрыть")
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if store.busy { ProgressView() }
-                    else if store.signedIn {
-                        Button { Task { await store.signOut() } } label: { Image(systemName: "rectangle.portrait.and.arrow.right") }.accessibilityLabel("Выйти")
-                    }
-                }
-            }
-            .alert("Torly", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
-                Button("OK") { store.error = nil }
-            } message: { Text(store.error ?? "") }
-            .sheet(isPresented: $showBooking) { LiveBookingForm(store: store) }
-            .sheet(item: $editingService) { LiveServiceForm(store: store, service: $0) }
-            .task { await store.restore() }
-            .onChange(of: scenePhase) { store.setActive($0 == .active) }
-            .onDisappear { store.setActive(false) }
-        }
-        .preferredColorScheme(.dark)
-        .tint(.blue)
-    }
-
-    private var ownerContent: some View {
-        List {
-            if store.businesses.count > 1 {
-                Picker("Бизнес", selection: $store.selectedBusinessId) {
-                    ForEach(store.businesses) { Text($0.name).tag($0.id) }
-                }.onChange(of: store.selectedBusinessId) { _ in Task { await store.perform { try await store.loadBookings() } } }
-            }
-            if let business = store.business {
-                Section {
-                    Label(business.address, systemImage: "mappin.and.ellipse")
-                    Label(business.phone, systemImage: "phone")
-                    Label(store.connected ? "Календарь синхронизирован" : "Подключение к календарю…", systemImage: store.connected ? "checkmark.icloud" : "icloud.slash")
-                        .font(.caption).foregroundStyle(store.connected ? .green : .secondary)
-                }
-                Section("Календарь") {
-                    DatePicker("Дата", selection: $store.day, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                        .environment(\.timeZone, store.businessCalendar.timeZone)
-                        .onChange(of: store.day) { _ in Task { await store.perform { try await store.loadBookings() } } }
-                    ForEach(store.bookings) { booking in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(store.time(booking.startsAt)).foregroundStyle(.blue).bold()
-                                Text(booking.clientName ?? "Перерыв")
-                                Spacer()
-                                if ["pending", "confirmed"].contains(booking.status) {
-                                    Menu {
-                                        Button("Подтвердить") { Task { await store.update(booking, status: "confirmed") } }
-                                        Button("Отменить запись", role: .destructive) { Task { await store.update(booking, status: "cancelled") } }
-                                    } label: { Image(systemName: "ellipsis") }.accessibilityLabel("Действия с записью")
-                                }
-                            }
-                            Text("\(booking.serviceName ?? "") · \(booking.staffName)").font(.subheadline)
-                            Text(booking.statusTitle).font(.caption).foregroundStyle(.secondary)
-                        }.padding(.vertical, 4)
-                    }
-                    if store.bookings.isEmpty { Text("На этот день записей нет").foregroundStyle(.secondary) }
-                    Button { showBooking = true } label: { Label("Добавить запись", systemImage: "plus") }
-                        .disabled(!business.services.contains(where: \.active))
-                }
-                Section("Услуги") {
-                    ForEach(business.services) { service in
-                        Button { editingService = service } label: {
-                            HStack {
-                                Text(service.name).foregroundStyle(.primary)
-                                Spacer()
-                                if let price = service.priceMinor, let minutes = service.minutes {
-                                    Text("\(Double(price) / 100, specifier: "%.2f") \(business.currency) · \(minutes) мин").font(.caption)
-                                } else { Text("Указать цену и время").font(.caption) }
-                                Image(systemName: "chevron.right").font(.caption)
-                            }
-                        }
-                    }
-                }
-                Section("Сотрудники") {
-                    ForEach(business.staff) { staff in
-                        NavigationLink(staff.name) { LiveHoursForm(store: store, staff: staff) }
-                    }
-                }
-            }
-        }
-        .refreshable { await store.perform { try await store.reload() } }
-    }
+    var body: some View { ContentView() }
 }
 
-private struct LiveServiceForm: View {
+struct LiveServiceForm: View {
     @ObservedObject var store: LiveBusinessStore
-    let service: RemoteService
+    let service: RemoteService?
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var price = ""
     @State private var minutes = 60
     @State private var error: String?
     @State private var saving = false
+    @State private var requestKey = UUID().uuidString
 
     var body: some View {
         NavigationStack {
@@ -425,11 +352,14 @@ private struct LiveServiceForm: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Сохранить") {
                         Task {
-                            guard let decimal = Decimal(string: price.replacingOccurrences(of: ",", with: ".")), decimal >= 0, decimal <= 1000000 else { error = "Укажи корректную цену"; return }
+                            let normalized = price.replacingOccurrences(of: ",", with: ".")
+                            guard normalized.range(of: #"^\d{1,7}(\.\d{1,2})?$"#, options: .regularExpression) != nil, let decimal = Decimal(string: normalized), decimal >= 0, decimal <= 1000000 else { error = "Укажи корректную цену"; return }
                             saving = true
                             defer { saving = false }
                             do {
-                                _ = try await store.request("/v1/services/\(service.id)", method: "PUT", body: ["name":name, "priceMinor":NSDecimalNumber(decimal: decimal * 100).intValue,"minutes":minutes])
+                                var body: [String: Any] = ["name":name, "priceMinor":NSDecimalNumber(decimal: decimal * 100).intValue,"minutes":minutes]
+                                if service == nil { body["businessId"] = store.selectedBusinessId; body["requestKey"] = requestKey }
+                                _ = try await store.request(service.map { "/v1/services/\($0.id)" } ?? "/v1/services", method: service == nil ? "POST" : "PUT", body: body)
                                 try await store.reload()
                                 dismiss()
                             } catch { self.error = error.localizedDescription }
@@ -437,12 +367,12 @@ private struct LiveServiceForm: View {
                     }.disabled(saving || name.isEmpty || price.isEmpty)
                 }
             }
-            .onAppear { name = service.name; minutes = service.minutes ?? 60; price = service.priceMinor.map { String(format: "%.2f", Double($0)/100) } ?? "" }
+            .onAppear { name = service?.name ?? ""; minutes = service?.minutes ?? 60; price = service?.priceMinor.map { String(format: "%.2f", Double($0)/100) } ?? "" }
         }
     }
 }
 
-private struct LiveBookingForm: View {
+struct LiveBookingForm: View {
     @ObservedObject var store: LiveBusinessStore
     @Environment(\.dismiss) private var dismiss
     @State private var serviceId = ""
@@ -489,7 +419,7 @@ private struct LiveBookingForm: View {
                             defer { saving = false }
                             do {
                                 _ = try await store.request("/v1/bookings", method: "POST", body: ["businessId":business.id,"staffId":staffId,"serviceId":serviceId,"startsAt":slot,"clientName":name,"clientPhone":phone,"requestKey":requestKey])
-                                try await store.loadBookings()
+                                try await store.reload()
                                 dismiss()
                             } catch { self.error = error.localizedDescription }
                         }
@@ -515,7 +445,7 @@ private struct LiveBookingForm: View {
     }
 }
 
-private struct LiveHoursForm: View {
+struct LiveHoursForm: View {
     @ObservedObject var store: LiveBusinessStore
     let staff: RemoteStaff
     @State private var open = Array(repeating: false, count: 7)

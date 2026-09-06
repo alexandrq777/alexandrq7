@@ -1,38 +1,36 @@
 # Torly
 
-Чистое iPhone-приложение на SwiftUI для MVP онлайн-записи.
+Native SwiftUI iPhone owner prototype, connected to https://torly.cybermemo.dev.
+There is no demo mode and no bundled client, business or appointment data.
 
-Подключение к серверу:
+## Working flows
 
-- «Войти в бизнес»: HTTPS-адрес сервера, email и пароль созданного владельца.
-- Календарь, запись, подтверждение/отмена, услуги и часы сотрудников работают через API.
-- Пароль не сохраняется, токен входа хранится в Keychain.
-- До развёртывания backend этот режим не сможет подключиться. IP сам по себе не заменяет HTTPS-адрес.
-- Архитектура и точные границы реализации: `Docs/server-architecture.md`.
-- Развёртывание: `Server/TorlyAPI/README.md`.
+- Email/password registration and login; new accounts start empty.
+- Three-step business setup: contact/region, database-backed category, employee hours.
+- Separate Calendar, Clients, Services and Business tabs.
+- Services: create, edit price/duration, archive; staff creation and individual hours.
+- Real availability, manual booking, confirmation, cancellation and rescheduling.
+- Breaks and leave block overlapping appointments.
+- Client cards, notes and recorded no-shows; day totals from actual appointments only.
+- HTTPS persistence and authenticated real-time calendar refresh.
+- Passwords are not stored on the phone; session tokens use Keychain.
 
-Что есть в демонстрационном режиме («Посмотреть демо»):
+## Open in Xcode
 
-- вход Apple / Google / телефон запланирован, реальные провайдеры пока не подключены;
-- выбор роли: бизнес, клиент или один аккаунт с двумя ролями;
-- кабинет бизнеса с публичной ссылкой, метриками и ближайшими записями;
-- месячный календарь бизнеса с занятыми и свободными слотами;
-- настройки услуг, цен, длительности, рабочих часов, сотрудников, перерывов и отпусков;
-- карточки клиентов, no-show пометки, лист ожидания, базовая аналитика и тарифы;
-- WhatsApp utility reminders: 500 включено в тариф, пакеты сверху с учетом себестоимости;
-- отзывы, формы/анкеты, push-уведомления и Google / Apple Calendar как экранный каркас;
-- клиентский сценарий: выбрать мастера, услугу, день в месяце и свободный час.
+1. Open `Torly.xcodeproj`.
+2. Select scheme `Torly` and a simulator or connected iPhone.
+3. Run. Physical-device signing uses the configured Aleksandr Podgaets team;
+   sign in to that Apple Developer account in Xcode, or select your own team.
 
-Как открыть:
+Bundle ID: `app.torly.mvp`. The owner can use the existing private login or
+register a new account. Login credentials are never included in this repository.
 
-1. Открой `Torly.xcodeproj` в Xcode.
-2. Выбери схему `Torly`.
-3. Выбери устройство `iPhone Simulator`, например iPhone 16.
-4. Нажми Run.
+## Remaining launch work
 
-Для iPhone Simulator Apple Developer Team не нужен: проект подписывается локально.
+Public client booking/link publishing, photos, email verification and password
+recovery, Apple/Google login, push delivery, WhatsApp/Telegram reminders, waitlist,
+reviews, forms, calendar integrations and subscriptions are not connected.
+The backend's plan metadata is ILS 39/month; it does not charge anyone.
+This is a working owner prototype, not an App Store-ready complete service.
 
-Для реального iPhone в проекте уже выбрана команда `Aleksandr Podgaets` и включена автоматическая подпись. В Xcode должен быть выполнен вход в соответствующий Apple Developer аккаунт. При запуске на другом аккаунте замени Team в `Signing & Capabilities`.
-
-Название на домашнем экране: `Torly`.
-Bundle id: `app.torly.mvp`.
+See `Docs/server-architecture.md` and `Server/TorlyAPI/README.md`.

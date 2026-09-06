@@ -9,6 +9,7 @@
     -Server
   }
   reverse_proxy api:3100 {
+    header_up X-Real-IP {remote_host}
     flush_interval -1
   }
 }

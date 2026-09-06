@@ -14,13 +14,11 @@ try {
   const response = await fetch(`${access.server}/v1/owner`,{headers});
   assert.equal(response.status,200);
   const {businesses} = await response.json();
-  assert.equal(businesses.length,1);
-  assert.equal(businesses[0].services.length,3);
-  assert.equal(businesses[0].staff.length,1);
-  assert.equal(businesses[0].hours.length,5);
-  assert(businesses[0].hours.every(h=>h.weekday<5 && h.opens_at==='07:00:00' && h.closes_at==='15:00:00'));
-  assert(businesses[0].services.every(s=>s.price_minor===null && s.minutes===null && !s.active));
-  console.log('HTTPS login and Olga profile verified; secrets omitted.');
+  if (process.argv.includes('--expect-empty')) assert.equal(businesses.length,0);
+  const categories = await fetch(`${access.server}/v1/categories`);
+  assert.equal(categories.status,200);
+  assert((await categories.json()).categories.length >= 18);
+  console.log('HTTPS login, account and categories verified; secrets omitted.');
 } finally {
   const response = await fetch(`${access.server}/v1/session`,{method:'DELETE',headers});
   assert.equal(response.status,200);
