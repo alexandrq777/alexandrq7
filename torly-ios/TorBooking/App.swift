@@ -362,6 +362,8 @@ enum TorlyTheme {
     // sRGB equivalents of the published SaaS design's OKLCH palette.
     static let background = Color(hex: 0x050E18)
     static let surface = Color(hex: 0x0E1824)
+    // The prototype's secondary surface: oklch(0.27 0.037 255).
+    static let panel = Color(hex: 0x1A2738)
     static let text = Color(hex: 0xE9F4FA)
     static let accent = Color(hex: 0x21B1F6)
     static let muted = Color(hex: 0x92A8B9)
@@ -440,7 +442,7 @@ struct TorlyForm<Content: View>: View {
     var body: some View {
         Form {
             content
-                .listRowBackground(TorlyTheme.surface)
+                .listRowBackground(TorlyTheme.panel)
                 .listRowSeparatorTint(TorlyTheme.border)
         }.toggleStyle(.switch).modifier(TorlySurface())
     }
@@ -452,7 +454,7 @@ struct TorlyList<Content: View>: View {
     var body: some View {
         List {
             content
-                .listRowBackground(TorlyTheme.surface)
+                .listRowBackground(TorlyTheme.panel)
                 .listRowSeparatorTint(TorlyTheme.border)
         }.listStyle(.insetGrouped).modifier(TorlySurface())
     }
