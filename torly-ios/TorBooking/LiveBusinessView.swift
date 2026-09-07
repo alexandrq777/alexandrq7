@@ -52,7 +52,7 @@ struct RemoteBooking: Decodable, Identifiable {
     let priceMinor: Int?
 
     var statusTitle: String {
-        ["pending": "Ожидает подтверждения", "confirmed": "Подтверждено", "cancelled": "Отменено", "completed": "Завершено", "no_show": "Не пришёл"][status] ?? status
+        ["pending": L("Ожидает подтверждения"), "confirmed": L("Подтверждено"), "cancelled": L("Отменено"), "completed": L("Завершено"), "no_show": L("Не пришёл")][status] ?? status
     }
 }
 
@@ -140,7 +140,7 @@ final class LiveBusinessStore: ObservableObject {
         guard let url = URL(string: serverAddress.trimmingCharacters(in: .whitespacesAndNewlines)),
               url.scheme == "https", url.host != nil, url.user == nil, url.password == nil,
               url.query == nil, url.fragment == nil, ["", "/"].contains(url.path) else {
-            throw NSError(domain: "Torly", code: 1, userInfo: [NSLocalizedDescriptionKey: "Укажи HTTPS-адрес сервера, например https://api.example.com"])
+            throw NSError(domain: "Torly", code: 1, userInfo: [NSLocalizedDescriptionKey: L("Укажи HTTPS-адрес сервера, например https://api.example.com")])
         }
         baseURL = url
         serverAddress = url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -160,7 +160,7 @@ final class LiveBusinessStore: ObservableObject {
         guard (200..<300).contains(status) else {
             if status == 401 { clearSession() }
             let message = (try? decoder.decode(APIMessage.self, from: data))?.error
-            throw NSError(domain: "Torly", code: status, userInfo: [NSLocalizedDescriptionKey: message ?? "Сервер недоступен. Попробуй ещё раз."])
+            throw NSError(domain: "Torly", code: status, userInfo: [NSLocalizedDescriptionKey: L(message ?? "Сервер недоступен. Попробуй ещё раз.")])
         }
         return data
     }
@@ -277,7 +277,7 @@ final class LiveBusinessStore: ObservableObject {
         defer { busy = false }
         do { try await action() }
         catch is CancellationError { }
-        catch { self.error = error.localizedDescription }
+        catch { self.error = localizedError(error) }
     }
 
     func setActive(_ value: Bool) {
@@ -326,10 +326,12 @@ final class LiveBusinessStore: ObservableObject {
 }
 
 struct LiveBusinessView: View {
+    @Environment(\.locale) private var appLocale
     var body: some View { ContentView() }
 }
 
 struct LiveServiceForm: View {
+    @Environment(\.locale) private var appLocale
     @ObservedObject var store: LiveBusinessStore
     let service: RemoteService?
     @Environment(\.dismiss) private var dismiss
@@ -343,19 +345,19 @@ struct LiveServiceForm: View {
     var body: some View {
         NavigationStack {
             TorlyForm {
-                TextField("Название", text: $name)
-                TextField("Цена (\(store.business?.currency ?? "ILS"))", text: $price).keyboardType(.decimalPad)
-                Stepper("\(minutes) мин", value: $minutes, in: 5...480, step: 5)
+                TextField(L("Название"), text: $name)
+                TextField(L("Цена (%@)", store.business?.currency ?? "ILS"), text: $price).keyboardType(.decimalPad)
+                Stepper(L("%d мин", minutes), value: $minutes, in: 5...480, step: 5)
                 if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }
-            .navigationTitle("Услуга")
+            .navigationTitle(L("Услуга"))
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Сохранить") {
+                    Button(L("Сохранить")) {
                         Task {
                             let normalized = price.replacingOccurrences(of: ",", with: ".")
-                            guard normalized.range(of: #"^\d{1,7}(\.\d{1,2})?$"#, options: .regularExpression) != nil, let decimal = Decimal(string: normalized), decimal >= 0, decimal <= 1000000 else { error = "Укажи корректную цену"; return }
+                            guard normalized.range(of: #"^\d{1,7}(\.\d{1,2})?$"#, options: .regularExpression) != nil, let decimal = Decimal(string: normalized), decimal >= 0, decimal <= 1000000 else { error = L("Укажи корректную цену"); return }
                             saving = true
                             defer { saving = false }
                             do {
@@ -364,7 +366,7 @@ struct LiveServiceForm: View {
                                 _ = try await store.request(service.map { "/v1/services/\($0.id)" } ?? "/v1/services", method: service == nil ? "POST" : "PUT", body: body)
                                 try await store.reload()
                                 dismiss()
-                            } catch { self.error = error.localizedDescription }
+                            } catch { self.error = localizedError(error) }
                         }
                     }.disabled(saving || name.isEmpty || price.isEmpty)
                 }
@@ -375,6 +377,7 @@ struct LiveServiceForm: View {
 }
 
 struct LiveBookingForm: View {
+    @Environment(\.locale) private var appLocale
     @ObservedObject var store: LiveBusinessStore
     @Environment(\.dismiss) private var dismiss
     @State private var serviceId = ""
@@ -391,30 +394,30 @@ struct LiveBookingForm: View {
     var body: some View {
         NavigationStack {
             TorlyForm {
-                Picker("Услуга", selection: $serviceId) {
-                    Text("Выбрать").tag("")
+                Picker(L("Услуга"), selection: $serviceId) {
+                    Text(L("Выбрать")).tag("")
                     ForEach(store.business?.services.filter(\.active) ?? []) { Text($0.name).tag($0.id) }
                 }
-                Picker("Сотрудник", selection: $staffId) {
-                    Text("Выбрать").tag("")
+                Picker(L("Сотрудник"), selection: $staffId) {
+                    Text(L("Выбрать")).tag("")
                     ForEach(store.business?.staff ?? []) { Text($0.name).tag($0.id) }
                 }
                 if loading { ProgressView() }
-                Picker("Время", selection: $slot) {
-                    Text("Выбрать").tag("")
+                Picker(L("Время"), selection: $slot) {
+                    Text(L("Выбрать")).tag("")
                     ForEach(slots, id: \.self) { Text(store.time($0)).tag($0) }
                 }
-                if !loading && slots.isEmpty { Text("Нет свободного времени").foregroundStyle(TorlyTheme.muted) }
-                TextField("Имя клиента", text: $name)
-                TextField("Телефон", text: $phone).keyboardType(.phonePad)
+                if !loading && slots.isEmpty { Text(L("Нет свободного времени")).foregroundStyle(TorlyTheme.muted) }
+                TextField(L("Имя клиента"), text: $name)
+                TextField(L("Телефон"), text: $phone).keyboardType(.phonePad)
                 if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }
             .disabled(saving)
-            .navigationTitle("Новая запись")
+            .navigationTitle(L("Новая запись"))
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Записать") {
+                    Button(L("Записать")) {
                         Task {
                             guard let business = store.business else { return }
                             saving = true
@@ -423,7 +426,7 @@ struct LiveBookingForm: View {
                                 _ = try await store.request("/v1/bookings", method: "POST", body: ["businessId":business.id,"staffId":staffId,"serviceId":serviceId,"startsAt":slot,"clientName":name,"clientPhone":phone,"requestKey":requestKey])
                                 try await store.reload()
                                 dismiss()
-                            } catch { self.error = error.localizedDescription }
+                            } catch { self.error = localizedError(error) }
                         }
                     }.disabled(saving || loading || slot.isEmpty || name.isEmpty)
                 }
@@ -437,7 +440,7 @@ struct LiveBookingForm: View {
                     let result = try await store.available(serviceId: serviceId, staffId: staffId, date: store.day)
                     try Task.checkCancellation()
                     slots = result
-                } catch { if !Task.isCancelled { self.error = error.localizedDescription } }
+                } catch { if !Task.isCancelled { self.error = localizedError(error) } }
             }
             .onChange(of: slot) { _ in requestKey = UUID().uuidString }
             .onChange(of: name) { _ in requestKey = UUID().uuidString }
@@ -448,6 +451,7 @@ struct LiveBookingForm: View {
 }
 
 struct LiveHoursForm: View {
+    @Environment(\.locale) private var appLocale
     @ObservedObject var store: LiveBusinessStore
     let staff: RemoteStaff
     @State private var open = Array(repeating: false, count: 7)
@@ -455,7 +459,7 @@ struct LiveHoursForm: View {
     @State private var ends = Array(repeating: "15:00", count: 7)
     @State private var message: String?
     @State private var saving = false
-    private let weekdays = ["Воскресенье","Понедельник","Вторник","Среда","Четверг","Пятница","Суббота"]
+    private var weekdays: [String] { [L("Воскресенье"),L("Понедельник"),L("Вторник"),L("Среда"),L("Четверг"),L("Пятница"),L("Суббота")] }
 
     var body: some View {
         TorlyForm {
@@ -464,15 +468,15 @@ struct LiveHoursForm: View {
                     Toggle(weekdays[day], isOn: $open[day])
                     if open[day] {
                         HStack {
-                            TextField("С", text: $starts[day]).keyboardType(.numbersAndPunctuation)
+                            TextField(L("С"), text: $starts[day]).keyboardType(.numbersAndPunctuation)
                             Text("–")
-                            TextField("До", text: $ends[day]).keyboardType(.numbersAndPunctuation)
+                            TextField(L("До"), text: $ends[day]).keyboardType(.numbersAndPunctuation)
                         }
                     }
                 }
             }
             if let message { Text(message) }
-            Button("Сохранить") {
+            Button(L("Сохранить")) {
                 Task {
                     saving = true
                     defer { saving = false }
@@ -480,8 +484,8 @@ struct LiveHoursForm: View {
                         let data: [[String: Any]] = (0..<7).filter { open[$0] }.map { ["weekday":$0,"opensAt":starts[$0],"closesAt":ends[$0]] }
                         _ = try await store.request("/v1/staff/\(staff.id)/hours", method: "PUT", body: data)
                         try await store.reload()
-                        message = "Сохранено"
-                    } catch { message = error.localizedDescription }
+                        message = L("Сохранено")
+                    } catch { message = localizedError(error) }
                 }
             }.disabled(saving)
         }

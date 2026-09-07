@@ -59,7 +59,7 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
     assert(categories.some(c=>c.id==='skin-care'));
     const businessInput = {name:'Fresh business',phone:'+972522222222',address:'Owner address',categoryId:'skin-care',
       timezone:'Asia/Jerusalem',currency:'ILS',locale:'he',country:'IL',staffName:'Owner',
-      hours:[{weekday:0,opensAt:'09:00',closesAt:'17:00'}],requestKey:randomUUID()};
+      hours:[{weekday:0,opensAt:'09:00',closesAt:'17:00'}],requestKey:randomUUID().toUpperCase()};
     assert.equal((await request('/v1/businesses','POST',{...businessInput,categoryId:'invalid'},freshToken)).status,400);
     const newBusiness = await request('/v1/businesses','POST',businessInput,freshToken);
     assert.equal(newBusiness.status,201,JSON.stringify(newBusiness.body));
@@ -68,6 +68,7 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
     assert.equal(fresh.services.length,0);
     assert.equal(fresh.staff.length,1);
     assert.equal(fresh.published,false);
+    assert.equal(fresh.slug,fresh.slug.toLowerCase());
     assert.equal((await request('/v1/businesses/'+fresh.id+'/publishing','PUT',{published:true},freshToken)).status,409);
     assert.deepEqual((await request('/v1/clients?businessId='+fresh.id,'GET',null,freshToken)).body.clients,[]);
     const freshServiceInput = {businessId:fresh.id,name:'New service',priceMinor:12550,minutes:30,requestKey:randomUUID()};
@@ -101,7 +102,9 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
     assert.equal((await request(publishPath,'PUT',{published:true})).status,401);
     assert.equal((await request(publishPath,'PUT',{published:true},token2)).status,404);
     assert.equal((await request(publishPath,'PUT',{published:true},freshToken)).status,200);
-    const publicPath='/v1/public/'+fresh.slug;
+    // Previously shipped iPhone builds created uppercase UUID slugs.
+    await pool.query('UPDATE businesses SET slug=upper(slug) WHERE id=$1',[fresh.id]);
+    const publicPath='/v1/public/'+fresh.slug.toUpperCase();
     const publicProfile=(await request(publicPath)).body;
     assert.equal(publicProfile.business.owner_id,undefined);
     assert.equal(publicProfile.clients,undefined);
@@ -137,6 +140,15 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
     assert(ownerEntries.some(e=>e.id===publicBooking.body.booking.id));
     const html=await fetch(base+'/book/'+fresh.slug);
     assert.equal(html.status,200);
+    for (const slug of [fresh.slug,fresh.slug.toUpperCase(),fresh.slug+'/']) {
+      const page=await fetch(base+'/book/'+slug);
+      assert.equal(page.status,200);
+      assert.match(page.headers.get('content-type'),/text\/html/);
+      const head=await fetch(base+'/book/'+slug,{method:'HEAD'});
+      assert.equal(head.status,200);
+      assert.match(head.headers.get('content-type'),/text\/html/);
+      assert.equal(await head.text(),'');
+    }
     assert(html.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
     assert((await html.text()).includes('booking-form'));
     assert.equal((await fetch(base+'/booking.js')).status,200);

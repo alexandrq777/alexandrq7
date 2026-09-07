@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        9D0000012C88C00100000001 = {isa = PBXBuildFile; fileRef = 9D0000022C88C00100000001; };
         9C0000042C88C00100000001 /* LiveBusinessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C00001A2C88C00100000001; };
 		9C0000012C88C00100000001 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0000112C88C00100000001 /* App.swift */; };
 		9C0000022C88C00100000001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C0000122C88C00100000001 /* ContentView.swift */; };
@@ -16,6 +17,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+        9D0000032C88C00100000001 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+        9D0000042C88C00100000001 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = he; path = he.lproj/Localizable.strings; sourceTree = "<group>"; };
+        9D0000052C88C00100000001 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
+        9D0000062C88C00100000001 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/Localizable.strings; sourceTree = "<group>"; };
         9C00001A2C88C00100000001 /* LiveBusinessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveBusinessView.swift; sourceTree = "<group>"; };
 		9C0000102C88C00100000001 /* Torly.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Torly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9C0000112C88C00100000001 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
@@ -38,6 +43,7 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+        9D0000022C88C00100000001 = {isa = PBXVariantGroup; children = (9D0000032C88C00100000001, 9D0000042C88C00100000001, 9D0000052C88C00100000001, 9D0000062C88C00100000001); name = Localizable.strings; sourceTree = "<group>"; };
 		9C0000302C88C00100000001 = {
 			isa = PBXGroup;
 			children = (
@@ -50,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				9C0000112C88C00100000001 /* App.swift */,
+                9D0000022C88C00100000001 /* Localizable.strings */,
 				9C0000122C88C00100000001 /* ContentView.swift */,
                 9C00001A2C88C00100000001 /* LiveBusinessView.swift */,
 				9C0000192C88C00100000001 /* Info.plist */,
@@ -118,6 +125,9 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+                he,
+                es,
+                ru,
 				Base,
 			);
 			mainGroup = 9C0000302C88C00100000001;
@@ -136,6 +146,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9C0000062C88C00100000001 /* Torly-AppIcon-60@2x.png in Resources */,
+                9D0000012C88C00100000001 /* Localizable.strings in Resources */,
 				9C0000072C88C00100000001 /* Torly-AppIcon-60@3x.png in Resources */,
 				9C0000082C88C00100000001 /* Torly-AppIcon-1024.png in Resources */,
 			);

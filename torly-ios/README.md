@@ -17,6 +17,9 @@ There is no demo mode and no bundled client, business or appointment data.
 - Public client page: Hebrew/English/Russian, month calendar, staff/service selection,
   real availability and booking requests without installing the owner app.
 - Passwords are not stored on the phone; session tokens use Keychain.
+- Settings includes Hebrew, English, Spanish and Russian. The selected language
+  persists on device, updates native date/currency formatting and enables Hebrew RTL.
+  Language selection is also available before login and during onboarding.
 
 ## Open in Xcode
 
@@ -42,3 +45,6 @@ Clients currently contact the business to cancel or move; self-service managemen
 and reminder delivery are not connected. Phone numbers are not OTP-verified.
 
 See `Docs/server-architecture.md` and `Server/TorlyAPI/README.md`.
+
+Legacy uppercase booking links remain supported. New links use lowercase slugs;
+booking pages support GET and HEAD with HTML content types for browser/share previews.

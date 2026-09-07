@@ -142,22 +142,22 @@ export async function createAPI(pool) {
         return send(res, 201, { token });
       }
       if (req.method === 'GET' && path === '/v1/categories') return send(res, 200, { categories: (await pool.query('SELECT * FROM categories ORDER BY id')).rows });
-      if (req.method === 'GET' && /^\/book\/[a-z0-9-]+$/.test(path)) {
+      if (['GET','HEAD'].includes(req.method) && /^\/book\/[a-z0-9-]+\/?$/i.test(path)) {
         res.writeHead(200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store',
           'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
           'Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'});
-        return res.end(await readFile(new URL('./public/booking.html',import.meta.url)));
+        return res.end(req.method === 'HEAD' ? undefined : await readFile(new URL('./public/booking.html',import.meta.url)));
       }
       const assets = {'/booking.js':['booking.js','text/javascript'],'/booking.css':['booking.css','text/css'],'/torly-icon.png':['torly-icon.png','image/png']};
-      if (req.method === 'GET' && assets[path]) {
+      if (['GET','HEAD'].includes(req.method) && assets[path]) {
         const [file,type] = assets[path];
         res.writeHead(200,{'Content-Type':type,'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});
-        return res.end(await readFile(new URL('./public/'+file,import.meta.url)));
+        return res.end(req.method === 'HEAD' ? undefined : await readFile(new URL('./public/'+file,import.meta.url)));
       }
-      const publicMatch = path.match(/^\/v1\/public\/([a-z0-9-]+)(?:\/(availability|bookings))?$/);
+      const publicMatch = path.match(/^\/v1\/public\/([a-z0-9-]+)(?:\/(availability|bookings))?$/i);
       if (publicMatch) {
         throttle('public:'+remoteIP,300);
-        const business = (await pool.query('SELECT id,slug,name,address,phone,timezone,currency,locale,category_id FROM businesses WHERE slug=$1 AND published=true', [publicMatch[1]])).rows[0];
+        const business = (await pool.query('SELECT id,slug,name,address,phone,timezone,currency,locale,category_id FROM businesses WHERE lower(slug)=lower($1) AND published=true', [publicMatch[1]])).rows[0];
         if (!business) throw new APIError(404, 'Business not found');
         if (req.method === 'GET' && !publicMatch[2]) {
           return send(res,200,{business,
@@ -192,7 +192,7 @@ export async function createAPI(pool) {
           if (previous) return previous;
           const category = (await db.query('SELECT id FROM categories WHERE id=$1',[input.categoryId])).rows[0];
           if (!category) throw new APIError(400,'Unknown category');
-          const business = (await db.query('INSERT INTO businesses(id,owner_id,slug,name,phone,address,category_id,timezone,currency,locale,country) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',[input.requestKey,accountId,`b-${input.requestKey}`,input.name,input.phone,input.address,input.categoryId,input.timezone,input.currency,input.locale,input.country])).rows[0];
+          const business = (await db.query('INSERT INTO businesses(id,owner_id,slug,name,phone,address,category_id,timezone,currency,locale,country) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',[input.requestKey,accountId,`b-${input.requestKey.toLowerCase()}`,input.name,input.phone,input.address,input.categoryId,input.timezone,input.currency,input.locale,input.country])).rows[0];
           const staff = (await db.query('INSERT INTO staff(business_id,name) VALUES($1,$2) RETURNING id',[business.id,input.staffName])).rows[0];
           for (const h of input.hours) await db.query('INSERT INTO working_hours VALUES($1,$2,$3,$4)',[staff.id,h.weekday,h.opensAt,h.closesAt]);
           await db.query("SELECT pg_notify('torly_calendar',$1)",[business.id]);

@@ -1,13 +1,14 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const words = {
+ es:{loading:'Cargando...',retry:'Reintentar',unavailable:'Esta página de reservas no está disponible.',serviceTitle:'Elige un servicio',service:'Servicio',staff:'Profesional',when:'Día y hora',details:'Tus datos',name:'Nombre completo',phone:'Teléfono con prefijo de país',consent:'Compartir mi nombre y teléfono con este negocio para gestionar mi cita.',submit:'Solicitar cita',success:'Solicitud recibida',pending:'Tu cita está pendiente de confirmación del negocio.',changes:'Para cambiar o cancelar la cita, contacta con el negocio.',call:'Llamar',whatsapp:'WhatsApp',empty:'No hay servicios disponibles.',noSlots:'No hay horas libres este día. Elige otro día.',times:'Elige una hora',zone:'Zona horaria del negocio',failed:'No se pudo conectar. Inténtalo de nuevo.',conflict:'Esta hora ya no está disponible. Elige otra.',invalid:'Revisa tus datos y la fecha seleccionada.',limit:'Demasiadas solicitudes. Inténtalo de nuevo en 15 minutos.',minutes:'min',prev:'Mes anterior',next:'Mes siguiente'},
  en:{loading:'Loading...',retry:'Retry',unavailable:'This booking page is unavailable.',serviceTitle:'Choose a service',service:'Service',staff:'Specialist',when:'Day and time',details:'Your details',name:'Full name',phone:'Phone with country code',consent:'Share my name and phone with this business to manage my appointment.',submit:'Request appointment',success:'Request received',pending:'Your appointment is awaiting confirmation from the business.',changes:'To change or cancel, contact the business.',call:'Call',whatsapp:'WhatsApp',empty:'No services available for booking.',noSlots:'No free times on this day. Choose another day.',times:'Choose a time',zone:'Business timezone',failed:'Unable to connect. Please try again.',conflict:'This time is no longer available. Choose another time.',invalid:'Check your details and selected date.',limit:'Too many requests. Please try again in 15 minutes.',minutes:'min',prev:'Previous month',next:'Next month'},
  he:{loading:'טוען...',retry:'ניסיון נוסף',unavailable:'עמוד ההזמנות אינו זמין.',serviceTitle:'בחירת שירות',service:'שירות',staff:'איש צוות',when:'יום ושעה',details:'הפרטים שלך',name:'שם מלא',phone:'טלפון כולל קידומת מדינה',consent:'אני מסכים לשתף שם וטלפון עם העסק לצורך ניהול התור.',submit:'בקשת תור',success:'הבקשה התקבלה',pending:'התור ממתין לאישור העסק.',changes:'לשינוי או ביטול יש לפנות לעסק.',call:'טלפון',whatsapp:'WhatsApp',empty:'אין שירותים זמינים להזמנה.',noSlots:'אין שעות פנויות ביום זה. בחרו יום אחר.',times:'בחרו שעה',zone:'אזור הזמן של העסק',failed:'לא ניתן להתחבר. נסו שוב.',conflict:'השעה כבר תפוסה. בחרו שעה אחרת.',invalid:'בדקו את הפרטים והתאריך.',limit:'יותר מדי בקשות. נסו שוב בעוד 15 דקות.',minutes:'דקות',prev:'החודש הקודם',next:'החודש הבא'},
  ru:{loading:'Загрузка…',retry:'Повторить',unavailable:'Страница записи недоступна.',serviceTitle:'Выбери услугу',service:'Услуга',staff:'Специалист',when:'День и время',details:'Твои данные',name:'Имя и фамилия',phone:'Телефон с кодом страны',consent:'Передать моё имя и телефон этому бизнесу для управления записью.',submit:'Записаться',success:'Заявка принята',pending:'Запись ожидает подтверждения бизнеса.',changes:'Для переноса или отмены свяжись с бизнесом.',call:'Позвонить',whatsapp:'WhatsApp',empty:'Пока нет доступных услуг.',noSlots:'На этот день свободного времени нет. Выбери другой день.',times:'Выбери время',zone:'Часовой пояс бизнеса',failed:'Не удалось подключиться. Попробуй ещё раз.',conflict:'Это время уже занято. Выбери другое.',invalid:'Проверь данные и выбранную дату.',limit:'Слишком много запросов. Попробуй через 15 минут.',minutes:'мин',prev:'Предыдущий месяц',next:'Следующий месяц'}
 };
 let lang = 'en', profile, today, latest, selectedDay, month, slot = '', slots = [], busy = false, done = false;
 let revision = 0, slotState = '', requestKey = '', lastPayload = '', receipt;
-const endpoint = '/v1/public/' + encodeURIComponent(location.pathname.split('/').pop());
+const endpoint = '/v1/public/' + encodeURIComponent(location.pathname.split('/').filter(Boolean).pop());
 const t = key => words[lang][key];
 const localDate = value => new Date(value + 'T12:00:00Z');
 const dateKey = date => date.toISOString().slice(0,10);
@@ -105,7 +106,9 @@ async function load() {
  text('status',t('loading'));$('retry').hidden=true;
  try {
   profile=await api('');
-  lang=['en','he','ru'].includes(navigator.language.slice(0,2)) ? navigator.language.slice(0,2) : profile.business.locale;
+  let preferred = navigator.language.slice(0,2);
+  try { preferred = localStorage.getItem('torly.booking.language') || preferred; } catch {}
+  lang=Object.hasOwn(words,preferred) ? preferred : (Object.hasOwn(words,profile.business.locale) ? profile.business.locale : 'en');
   $('language').value=lang;
   const business=profile.business;
   text('business-name',business.name);text('address',business.address);
@@ -129,7 +132,7 @@ async function load() {
   await loadSlots();
  } catch(error) {text('status',message(error));$('retry').hidden=false;}
 }
-$('language').onchange=()=>{lang=$('language').value;translate();};
+$('language').onchange=()=>{lang=$('language').value;try {localStorage.setItem('torly.booking.language',lang);} catch {} translate();};
 $('previous').onclick=()=>moveMonth(-1);$('next').onclick=()=>moveMonth(1);
 $('service').onchange=loadSlots;$('staff').onchange=loadSlots;$('retry').onclick=load;
 $('booking-form').onsubmit=async event=>{

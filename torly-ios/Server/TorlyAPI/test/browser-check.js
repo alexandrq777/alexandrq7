@@ -30,13 +30,17 @@ try {
  hours:Array.from({length:7},(_,weekday)=>({weekday,opensAt:'00:00',closesAt:'23:59'}))},token);
  await request('/v1/services','POST',{businessId:business.id,name:'Consultation',priceMinor:12000,minutes:30,requestKey:randomUUID()},token);
  await request('/v1/businesses/'+business.id+'/publishing','PUT',{published:true},token);
- const path='/book/b-'+business.id;
+ await pool.query('UPDATE businesses SET slug=upper(slug) WHERE id=$1',[business.id]);
+ const path='/book/B-'+business.id.toUpperCase()+'/';
  browser=await chromium.launch({headless:true,...(process.env.BROWSER_CHANNEL?{channel:process.env.BROWSER_CHANNEL}:{})});
- for(const [width,height,lang] of [[390,844,'ru'],[1440,1000,'en'],[390,844,'he']]){
+ for(const [width,height,lang] of [[390,844,'ru'],[1440,1000,'en'],[390,844,'he'],[390,844,'es']]){
   const page=await browser.newPage({viewport:{width,height}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(base+path);await page.locator('#profile').waitFor({state:'visible'});
   await page.locator('#language').selectOption(lang);
+  await page.reload();
+  await page.locator('#profile').waitFor({state:'visible'});
+  assert.equal(await page.locator('#language').inputValue(),lang);
   await page.waitForFunction(()=>document.querySelector('#slot-status').textContent!=='Loading...');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   assert.equal(await page.locator('.brand img').evaluate(img=>img.complete&&img.naturalWidth>0),true);

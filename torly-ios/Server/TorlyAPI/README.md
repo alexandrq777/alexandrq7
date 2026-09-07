@@ -28,6 +28,8 @@ JSON uses snake_case in database responses and camelCase in mutation inputs.
 - `GET /v1/categories`: extensible business categories, Hebrew/English.
 - `GET /v1/public/:slug`: published business profile, no private client fields.
 - `GET /book/:slug`: responsive client page; no owner app installation required.
+- Booking pages also support HEAD and optional trailing slashes. Slug lookup is
+  case-insensitive to preserve links created by older iPhone UUIDs.
 - `GET /v1/public/:slug/availability?staffId=UUID&serviceId=UUID&date=YYYY-MM-DD`.
 - `POST /v1/public/:slug/bookings`: serviceId, staffId, startsAt, clientName,
   clientPhone, requestKey; business is resolved from the published slug.
@@ -77,6 +79,9 @@ Optional browser QA: `node test/browser-check.js` with Playwright available.
 PLAYWRIGHT_MODULE may point to its module, and BROWSER_CHANNEL=chrome uses local
 Chrome. Fixtures exist only in memory. Public phone numbers are not OTP-verified;
 add production bot protection/verification before a broad commercial launch.
+
+Business and client-page locales: he, en, es, ru. Native Localizable.strings
+coverage and format-argument consistency are checked by localization.test.js on macOS.
 
 `nginx-torly-api.conf` and `torly-api.service` belong to the old in-memory starter.
 Use Compose/Caddy for this version; do not install both configurations.

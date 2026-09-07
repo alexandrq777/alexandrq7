@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.locale) private var appLocale
     @StateObject private var store = LiveBusinessStore()
     @Environment(\.scenePhase) private var scenePhase
     @State private var email = ""
@@ -22,9 +23,9 @@ struct ContentView: View {
                 NavigationStack {
                     VStack(spacing: 20) {
                         if store.busy { ProgressView() }
-                        Text("Загрузка аккаунта").font(.headline)
-                        Button("Повторить") { Task { await store.perform { try await store.reload() } } }
-                        Button("Выйти") { Task { await store.signOut() } }
+                        Text(L("Загрузка аккаунта")).font(.headline)
+                        Button(L("Повторить")) { Task { await store.perform { try await store.reload() } } }
+                        Button(L("Выйти")) { Task { await store.signOut() } }
                     }.navigationTitle("Torly")
                 }
             } else if store.business == nil {
@@ -32,16 +33,17 @@ struct ContentView: View {
                     BusinessSetupForm(store: store, editing: false)
                         .toolbar {
                             ToolbarItem(placement: .topBarLeading) {
-                                Button("Выйти") { Task { await store.signOut() } }
+                                Button(L("Выйти")) { Task { await store.signOut() } }
                             }
                         }
                 }
             } else {
                 TabView {
-                    calendar.tabItem { Label("Календарь", systemImage: "calendar") }
-                    clients.tabItem { Label("Клиенты", systemImage: "person.2") }
-                    services.tabItem { Label("Услуги", systemImage: "scissors") }
-                    business.tabItem { Label("Бизнес", systemImage: "building.2") }
+                    calendar.tabItem { Label(L("Календарь"), systemImage: "calendar") }
+                    clients.tabItem { Label(L("Клиенты"), systemImage: "person.2") }
+                    services.tabItem { Label(L("Услуги"), systemImage: "scissors") }
+                    business.tabItem { Label(L("Бизнес"), systemImage: "building.2") }
+                    NavigationStack { LanguageSettings() }.tabItem { Label(L("Настройки"), systemImage: "gearshape") }
                 }
             }
         }
@@ -64,6 +66,7 @@ struct ContentView: View {
     private var login: some View {
         NavigationStack {
             TorlyForm {
+                Section { LanguagePicker() }
                 Section {
                     VStack(spacing: 12) {
                         if let path = Bundle.main.path(forResource: "Torly-AppIcon-1024", ofType: "png"),
@@ -71,21 +74,21 @@ struct ContentView: View {
                             Image(uiImage: icon).resizable().frame(width: 76, height: 76).clipShape(RoundedRectangle(cornerRadius: 18))
                         }
                         Text("Torly").font(.largeTitle.bold()).foregroundStyle(.tint)
-                        Text("Твой бизнес. Твоё время.").foregroundStyle(TorlyTheme.muted)
+                        Text(L("Твой бизнес. Твоё время.")).foregroundStyle(TorlyTheme.muted)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 24)
                     .listRowBackground(Color.clear)
                 }
                 Section {
-                    Picker("Аккаунт", selection: $registering) {
-                        Text("Войти").tag(false)
-                        Text("Регистрация").tag(true)
+                    Picker(L("Аккаунт"), selection: $registering) {
+                        Text(L("Войти")).tag(false)
+                        Text(L("Регистрация")).tag(true)
                     }.pickerStyle(.segmented)
-                    TextField("Email", text: $email, prompt: Text("Email").foregroundColor(TorlyTheme.muted))
+                    TextField("Email", text: $email, prompt: Text(L("Email")).foregroundColor(TorlyTheme.muted))
                         .keyboardType(.emailAddress).textContentType(.username)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    SecureField(registering ? "Пароль, минимум 12 символов" : "Пароль", text: $password,
-                                prompt: Text(registering ? "Пароль, минимум 12 символов" : "Пароль").foregroundColor(TorlyTheme.muted))
+                    SecureField(registering ? L("Пароль, минимум 12 символов") : L("Пароль"), text: $password,
+                                prompt: Text(registering ? L("Пароль, минимум 12 символов") : L("Пароль")).foregroundColor(TorlyTheme.muted))
                         .textContentType(registering ? .newPassword : .password)
                     Button {
                         Task {
@@ -94,7 +97,7 @@ struct ContentView: View {
                         }
                     } label: {
                         HStack {
-                            Text(registering ? "Создать аккаунт" : "Войти")
+                            Text(registering ? L("Создать аккаунт") : L("Войти"))
                             Spacer()
                             if store.busy { ProgressView() } else { Image(systemName: "arrow.right") }
                         }
@@ -111,47 +114,47 @@ struct ContentView: View {
             TorlyList {
                 onlineBooking
                 Section {
-                    DatePicker("Дата", selection: $store.day, displayedComponents: .date)
+                    DatePicker(L("Дата"), selection: $store.day, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .environment(\.timeZone, store.businessCalendar.timeZone)
                         .onChange(of: store.day) { _ in
                             Task { await store.perform { try await store.loadBookings() } }
                         }
                     if (store.business?.staff.count ?? 0) > 1 {
-                        Picker("Сотрудник", selection: $staffFilter) {
-                            Text("Все").tag("")
+                        Picker(L("Сотрудник"), selection: $staffFilter) {
+                            Text(L("Все")).tag("")
                             ForEach(store.business?.staff ?? []) { Text($0.name).tag($0.id) }
                         }
                     }
                 }
-                Section("Записи") {
+                Section(L("Записи")) {
                     let entries = store.bookings.filter { staffFilter.isEmpty || $0.staffId == staffFilter }
                     if entries.isEmpty {
-                        EmptyRow(title: "Записей пока нет", symbol: "calendar")
+                        EmptyRow(title: L("Записей пока нет"), symbol: "calendar")
                     }
                     ForEach(entries) { booking in bookingRow(booking) }
                 }
-                Section("Итоги дня") {
-                    LabeledContent("Записей", value: "\(store.bookings.filter { $0.kind == "booking" && $0.status != "cancelled" }.count)")
-                    LabeledContent("Завершено", value: "\(store.bookings.filter { $0.kind == "booking" && $0.status == "completed" }.count)")
-                    LabeledContent("Стоимость завершённых услуг", value: money(store.bookings.filter { $0.kind == "booking" && $0.status == "completed" }.reduce(0) { $0 + ($1.priceMinor ?? 0) }))
+                Section(L("Итоги дня")) {
+                    LabeledContent(L("Записей"), value: "\(store.bookings.filter { $0.kind == "booking" && $0.status != "cancelled" }.count)")
+                    LabeledContent(L("Завершено"), value: "\(store.bookings.filter { $0.kind == "booking" && $0.status == "completed" }.count)")
+                    LabeledContent(L("Стоимость завершённых услуг"), value: money(store.bookings.filter { $0.kind == "booking" && $0.status == "completed" }.reduce(0) { $0 + ($1.priceMinor ?? 0) }))
                 }
                 Section {
-                    Label(store.connected ? "Календарь синхронизирован" : "Переподключение…",
+                    Label(store.connected ? L("Календарь синхронизирован") : L("Переподключение…"),
                           systemImage: store.connected ? "checkmark.icloud" : "icloud.slash")
                         .font(.caption).foregroundStyle(TorlyTheme.muted)
                 }
             }
-            .navigationTitle(store.business?.name ?? "Календарь")
+            .navigationTitle(store.business?.name ?? L("Календарь"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("Новая запись", systemImage: "calendar.badge.plus") { showBooking = true }
+                        Button(L("Новая запись"), systemImage: "calendar.badge.plus") { showBooking = true }
                             .disabled(!(store.business?.services.contains(where: \.active) ?? false))
-                        Button("Перерыв или отпуск", systemImage: "pause.circle") { showBlock = true }
+                        Button(L("Перерыв или отпуск"), systemImage: "pause.circle") { showBlock = true }
                             .disabled(store.business?.staff.isEmpty ?? true)
-                    } label: { Image(systemName: "plus") }.accessibilityLabel("Добавить")
+                    } label: { Image(systemName: "plus") }.accessibilityLabel(L("Добавить"))
                 }
             }
             .refreshable { await store.perform { try await store.reload() } }
@@ -168,17 +171,17 @@ struct ContentView: View {
                     Menu {
                         if booking.kind == "booking" {
                             if booking.status == "pending" {
-                                Button("Подтвердить") { Task { await store.update(booking, status: "confirmed") } }
+                                Button(L("Подтвердить")) { Task { await store.update(booking, status: "confirmed") } }
                             }
-                            Button("Перенести") { moving = booking }
-                            Button("Завершить") { Task { await store.update(booking, status: "completed") } }
-                            Button("Не пришёл") { Task { await store.update(booking, status: "no_show") } }
+                            Button(L("Перенести")) { moving = booking }
+                            Button(L("Завершить")) { Task { await store.update(booking, status: "completed") } }
+                            Button(L("Не пришёл")) { Task { await store.update(booking, status: "no_show") } }
                         }
-                        Button("Отменить", role: .destructive) { Task { await store.update(booking, status: "cancelled") } }
-                    } label: { Image(systemName: "ellipsis") }.accessibilityLabel("Действия с записью")
+                        Button(L("Отменить"), role: .destructive) { Task { await store.update(booking, status: "cancelled") } }
+                    } label: { Image(systemName: "ellipsis") }.accessibilityLabel(L("Действия с записью"))
                 }
             }
-            Text(booking.clientName ?? (booking.kind == "time_off" ? "Отпуск" : "Перерыв")).font(.headline)
+            Text(booking.clientName ?? (booking.kind == "time_off" ? L("Отпуск") : L("Перерыв"))).font(.headline)
             Text([booking.serviceName, booking.staffName].compactMap { $0 }.joined(separator: " · "))
                 .font(.subheadline).foregroundStyle(TorlyTheme.muted)
             HStack(spacing: 6) {
@@ -191,7 +194,7 @@ struct ContentView: View {
     private var clients: some View {
         NavigationStack {
             TorlyList {
-                if store.clients.isEmpty { EmptyRow(title: "Клиентов пока нет", symbol: "person.2") }
+                if store.clients.isEmpty { EmptyRow(title: L("Клиентов пока нет"), symbol: "person.2") }
                 ForEach(store.clients.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.phone.contains(search) }) { client in
                     NavigationLink {
                         ClientDetailForm(store: store, client: client)
@@ -200,13 +203,13 @@ struct ContentView: View {
                             Text(client.name)
                             Text(client.phone).font(.caption).foregroundStyle(TorlyTheme.muted)
                             if client.noShowCount > 0 {
-                                Label("Неявки: \(client.noShowCount)", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(TorlyTheme.warning)
+                                Label(L("Неявки: %d", client.noShowCount), systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(TorlyTheme.warning)
                             }
                         }
                     }
                 }
-            }.navigationTitle("Клиенты")
-                .searchable(text: $search, prompt: "Имя или телефон")
+            }.navigationTitle(L("Клиенты"))
+                .searchable(text: $search, prompt: L("Имя или телефон"))
                 .refreshable { await store.perform { try await store.loadClients() } }
         }
     }
@@ -215,15 +218,15 @@ struct ContentView: View {
         NavigationStack {
             TorlyList {
                 if store.business?.services.isEmpty ?? true {
-                    EmptyRow(title: "Услуг пока нет", symbol: "scissors")
-                    Button("Добавить услугу", systemImage: "plus") { showService = true }
+                    EmptyRow(title: L("Услуг пока нет"), symbol: "scissors")
+                    Button(L("Добавить услугу"), systemImage: "plus") { showService = true }
                 }
                 ForEach(store.business?.services ?? []) { service in
                     Button { editingService = service } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(service.name).foregroundStyle(.primary)
-                                Text(service.active ? "\(service.minutes ?? 0) мин" : "В архиве").font(.caption).foregroundStyle(TorlyTheme.muted)
+                                Text(service.active ? L("%d мин", service.minutes ?? 0) : L("В архиве")).font(.caption).foregroundStyle(TorlyTheme.muted)
                             }
                             Spacer()
                             if let price = service.priceMinor { Text(money(price)) }
@@ -231,7 +234,7 @@ struct ContentView: View {
                         }
                     }.swipeActions {
                         if service.active {
-                            Button("В архив", role: .destructive) {
+                            Button(L("В архив"), role: .destructive) {
                                 Task {
                                     await store.perform {
                                         _ = try await store.request("/v1/services/\(service.id)", method: "DELETE")
@@ -242,10 +245,10 @@ struct ContentView: View {
                         }
                     }
                 }
-            }.navigationTitle("Услуги")
+            }.navigationTitle(L("Услуги"))
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button { showService = true } label: { Image(systemName: "plus") }.accessibilityLabel("Добавить услугу")
+                        Button { showService = true } label: { Image(systemName: "plus") }.accessibilityLabel(L("Добавить услугу"))
                     }
                 }
                 .refreshable { await store.perform { try await store.reload() } }
@@ -257,7 +260,7 @@ struct ContentView: View {
             TorlyList {
                 onlineBooking
                 if store.businesses.count > 1 {
-                    Picker("Бизнес", selection: $store.selectedBusinessId) {
+                    Picker(L("Бизнес"), selection: $store.selectedBusinessId) {
                         ForEach(store.businesses) { Text($0.name).tag($0.id) }
                     }.onChange(of: store.selectedBusinessId) { _ in
                         staffFilter = ""
@@ -270,34 +273,34 @@ struct ContentView: View {
                         Label(business.address, systemImage: "mappin.and.ellipse")
                         Label(business.phone, systemImage: "phone")
                         Text(business.timezone).font(.caption).foregroundStyle(TorlyTheme.muted)
-                        NavigationLink("Данные бизнеса") { BusinessSetupForm(store: store, editing: true) }
+                        NavigationLink(L("Данные бизнеса")) { BusinessSetupForm(store: store, editing: true) }
                     }
-                    Section("Команда и рабочие часы") {
+                    Section(L("Команда и рабочие часы")) {
                         ForEach(business.staff) { staff in
                             NavigationLink { LiveHoursForm(store: store, staff: staff) } label: {
                                 Label(staff.name, systemImage: "person.crop.circle")
                             }
                         }
-                        Button("Добавить сотрудника", systemImage: "person.badge.plus") { showStaff = true }
+                        Button(L("Добавить сотрудника"), systemImage: "person.badge.plus") { showStaff = true }
                     }
                 }
                 Section {
-                    Button("Выйти из аккаунта", role: .destructive) { Task { await store.signOut() } }
+                    Button(L("Выйти из аккаунта"), role: .destructive) { Task { await store.signOut() } }
                         .disabled(store.busy)
                 }
-            }.navigationTitle("Мой бизнес")
+            }.navigationTitle(L("Мой бизнес"))
         }
     }
 
     private func money(_ minor: Int) -> String {
-        (Double(minor) / 100).formatted(.currency(code: store.business?.currency ?? "ILS"))
+        (Double(minor) / 100).formatted(.currency(code: store.business?.currency ?? "ILS").locale(TorlyLanguage.locale))
     }
 
     @ViewBuilder private var onlineBooking: some View {
         if let business = store.business,
-           let url = URL(string: store.serverAddress + "/book/" + business.slug) {
-            Section("Онлайн-запись") {
-                Toggle("Принимать записи по ссылке", isOn: Binding(
+           let url = URL(string: "https://torly.cybermemo.dev/book/" + business.slug.lowercased()) {
+            Section(L("Онлайн-запись")) {
+                Toggle(L("Принимать записи по ссылке"), isOn: Binding(
                     get: { store.business?.published ?? false },
                     set: { published in
                         Task {
@@ -311,13 +314,13 @@ struct ContentView: View {
                 )).disabled(store.busy)
                 if business.published {
                     ShareLink(item: url) {
-                        Label("Поделиться с клиентом", systemImage: "square.and.arrow.up")
+                        Label(L("Поделиться с клиентом"), systemImage: "square.and.arrow.up")
                     }.buttonStyle(TorlyPrimaryButtonStyle())
-                    Link(destination: url) { Label("Открыть страницу записи", systemImage: "safari") }
+                    Link(destination: url) { Label(L("Открыть страницу записи"), systemImage: "safari") }
                     Text(url.absoluteString).font(.caption).foregroundStyle(TorlyTheme.muted)
                         .textSelection(.enabled)
                 } else {
-                    Text("Добавь услуги и рабочие часы, затем включи онлайн-запись.")
+                    Text(L("Добавь услуги и рабочие часы, затем включи онлайн-запись."))
                         .font(.caption).foregroundStyle(TorlyTheme.muted)
                 }
             }
@@ -326,6 +329,7 @@ struct ContentView: View {
 }
 
 private struct EmptyRow: View {
+    @Environment(\.locale) private var appLocale
     let title: String
     let symbol: String
     var body: some View {
@@ -341,6 +345,7 @@ private struct EmptyRow: View {
 }
 
 private struct BusinessSetupForm: View {
+    @Environment(\.locale) private var appLocale
     @ObservedObject var store: LiveBusinessStore
     let editing: Bool
     @Environment(\.dismiss) private var dismiss
@@ -360,48 +365,49 @@ private struct BusinessSetupForm: View {
     @State private var requestKey = UUID().uuidString
     @State private var saving = false
     @State private var error: String?
-    private let titles = ["Данные бизнеса", "Категория", "Рабочие часы"]
+    private let titles = [L("Данные бизнеса"), L("Категория"), L("Рабочие часы")]
 
     var body: some View {
         TorlyForm {
+            Section { LanguagePicker() }
             if !editing {
                 Section {
                     ProgressView(value: Double(step + 1), total: 3)
-                    Text("Шаг \(step + 1) из 3").font(.caption).foregroundStyle(TorlyTheme.muted)
+                    Text(L("Шаг %d из 3", step + 1)).font(.caption).foregroundStyle(TorlyTheme.muted)
                 }
             }
             if editing || step == 0 {
-                Section("Бизнес") {
-                    TextField("Название бизнеса", text: $name)
-                    TextField("Телефон с кодом страны", text: $phone).keyboardType(.phonePad)
-                    TextField("Адрес", text: $address)
-                    if !editing { TextField("Твоё имя", text: $staffName) }
+                Section(L("Бизнес")) {
+                    TextField(L("Название бизнеса"), text: $name)
+                    TextField(L("Телефон с кодом страны"), text: $phone).keyboardType(.phonePad)
+                    TextField(L("Адрес"), text: $address)
+                    if !editing { TextField(L("Твоё имя"), text: $staffName) }
                 }
-                Section("Регион") {
-                    Picker("Страна", selection: $country) {
-                        Text("Israel").tag("IL"); Text("United States").tag("US")
-                        Text("United Kingdom").tag("GB"); Text("Germany").tag("DE")
-                        Text("France").tag("FR"); Text("Spain").tag("ES")
+                Section(L("Регион")) {
+                    Picker(L("Страна"), selection: $country) {
+                        Text(L("Israel")).tag("IL"); Text(L("United States")).tag("US")
+                        Text(L("United Kingdom")).tag("GB"); Text(L("Germany")).tag("DE")
+                        Text(L("France")).tag("FR"); Text(L("Spain")).tag("ES")
                     }
-                    Picker("Валюта", selection: $currency) {
+                    Picker(L("Валюта"), selection: $currency) {
                         ForEach(["ILS", "USD", "EUR", "GBP"], id: \.self) { Text($0).tag($0) }
                     }
-                    Picker("Часовой пояс", selection: $timezone) {
+                    Picker(L("Часовой пояс"), selection: $timezone) {
                         ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0).tag($0) }
                     }
-                    Picker("Язык бизнеса", selection: $locale) {
-                        Text("עברית").tag("he"); Text("English").tag("en")
+                    Picker(L("Язык бизнеса"), selection: $locale) {
+                        ForEach(TorlyLanguage.codes, id: \.self) { Text(TorlyLanguage.names[$0] ?? $0).tag($0) }
                     }
                 }
             }
             if editing || step == 1 {
-                Section("Категория") {
+                Section(L("Категория")) {
                     if store.categories.isEmpty {
-                        Button("Загрузить категории") { Task { await loadCategories() } }
+                        Button(L("Загрузить категории")) { Task { await loadCategories() } }
                     }
-                    Picker("Вид бизнеса", selection: $categoryId) {
-                        Text("Выбрать").tag("")
-                        ForEach(store.categories) { Text(locale == "he" ? $0.nameHe : $0.nameEn).tag($0.id) }
+                    Picker(L("Вид бизнеса"), selection: $categoryId) {
+                        Text(L("Выбрать")).tag("")
+                        ForEach(store.categories) { Text(TorlyLanguage.current == "he" ? $0.nameHe : L($0.nameEn)).tag($0.id) }
                     }.pickerStyle(.inline)
                 }
             }
@@ -410,16 +416,16 @@ private struct BusinessSetupForm: View {
             }
             if let error { Section { Text(error).foregroundStyle(TorlyTheme.danger) } }
             Section {
-                Button(editing ? "Сохранить" : step == 2 ? "Создать бизнес" : "Продолжить") {
+                Button(editing ? L("Сохранить") : step == 2 ? L("Создать бизнес") : L("Продолжить")) {
                     if !editing && step < 2 { step += 1 }
                     else { Task { await save() } }
                 }.disabled(saving || !valid)
                 if saving { ProgressView() }
-                if !editing && step > 0 { Button("Назад") { step -= 1 }.disabled(saving) }
+                if !editing && step > 0 { Button(L("Назад")) { step -= 1 }.disabled(saving) }
             }
         }
         .disabled(saving)
-        .navigationTitle(editing ? "Данные бизнеса" : titles[step])
+        .navigationTitle(editing ? L("Данные бизнеса") : titles[step])
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if editing, let b = store.business {
@@ -441,7 +447,7 @@ private struct BusinessSetupForm: View {
     }
 
     private func loadCategories() async {
-        do { try await store.loadCategories() } catch { self.error = error.localizedDescription }
+        do { try await store.loadCategories() } catch { self.error = localizedError(error) }
     }
 
     private func save() async {
@@ -459,11 +465,11 @@ private struct BusinessSetupForm: View {
                                         method: editing ? "PUT" : "POST", body: payload)
             try await store.reload()
             if editing { dismiss() }
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = localizedError(error) }
     }
 }
 
-private let dayNames = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"]
+private var dayNames: [String] { [L("Воскресенье"), L("Понедельник"), L("Вторник"), L("Среда"), L("Четверг"), L("Пятница"), L("Суббота")] }
 
 private func validHours(open: [Bool], starts: [String], ends: [String]) -> Bool {
     (0..<7).filter { open[$0] }.allSatisfy {
@@ -478,6 +484,7 @@ private func hoursPayload(open: [Bool], starts: [String], ends: [String]) -> [[S
 }
 
 private struct HoursFields: View {
+    @Environment(\.locale) private var appLocale
     @Binding var open: [Bool]
     @Binding var starts: [String]
     @Binding var ends: [String]
@@ -498,6 +505,7 @@ private struct HoursFields: View {
 }
 
 private struct StaffCreationForm: View {
+    @Environment(\.locale) private var appLocale
     @ObservedObject var store: LiveBusinessStore
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
@@ -511,15 +519,15 @@ private struct StaffCreationForm: View {
     var body: some View {
         NavigationStack {
             TorlyForm {
-                TextField("Имя сотрудника", text: $name)
+                TextField(L("Имя сотрудника"), text: $name)
                 HoursFields(open: $open, starts: $starts, ends: $ends)
                 if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }.disabled(saving)
-                .navigationTitle("Новый сотрудник")
+                .navigationTitle(L("Новый сотрудник"))
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Добавить") {
+                        Button(L("Добавить")) {
                             Task {
                                 saving = true
                                 defer { saving = false }
@@ -529,7 +537,7 @@ private struct StaffCreationForm: View {
                                         "hours":hoursPayload(open: open, starts: starts, ends: ends)])
                                     try await store.reload()
                                     dismiss()
-                                } catch { self.error = error.localizedDescription }
+                                } catch { self.error = localizedError(error) }
                             }
                         }.disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty || !validHours(open: open, starts: starts, ends: ends))
                     }
@@ -539,6 +547,7 @@ private struct StaffCreationForm: View {
 }
 
 private struct ClientDetailForm: View {
+    @Environment(\.locale) private var appLocale
     @ObservedObject var store: LiveBusinessStore
     let client: RemoteClient
     @State private var note = ""
@@ -549,20 +558,20 @@ private struct ClientDetailForm: View {
         TorlyForm {
             Section {
                 if let url = URL(string: "tel:\(client.phone)") { Link(client.phone, destination: url) }
-                LabeledContent("Завершённых визитов", value: "\(client.visits)")
-                LabeledContent("Неявки", value: "\(client.noShowCount)")
+                LabeledContent(L("Завершённых визитов"), value: "\(client.visits)")
+                LabeledContent(L("Неявки"), value: "\(client.noShowCount)")
             }
-            Section("Заметка") { TextEditor(text: $note).frame(minHeight: 140) }
+            Section(L("Заметка")) { TextEditor(text: $note).frame(minHeight: 140) }
             if let message { Text(message) }
-            Button("Сохранить") {
+            Button(L("Сохранить")) {
                 Task {
                     saving = true
                     defer { saving = false }
                     do {
                         _ = try await store.request("/v1/clients/\(client.id)", method: "PUT", body: ["note":note])
                         try await store.loadClients()
-                        message = "Сохранено"
-                    } catch { message = error.localizedDescription }
+                        message = L("Сохранено")
+                    } catch { message = localizedError(error) }
                 }
             }.disabled(saving || note.count > 2000)
         }.navigationTitle(client.name).onAppear { note = client.note }
@@ -570,6 +579,7 @@ private struct ClientDetailForm: View {
 }
 
 private struct BlockForm: View {
+    @Environment(\.locale) private var appLocale
     @ObservedObject var store: LiveBusinessStore
     @Environment(\.dismiss) private var dismiss
     @State private var staffId = ""
@@ -583,23 +593,23 @@ private struct BlockForm: View {
     var body: some View {
         NavigationStack {
             TorlyForm {
-                Picker("Тип", selection: $kind) {
-                    Text("Перерыв").tag("break"); Text("Отпуск").tag("time_off")
+                Picker(L("Тип"), selection: $kind) {
+                    Text(L("Перерыв")).tag("break"); Text(L("Отпуск")).tag("time_off")
                 }.pickerStyle(.segmented)
-                Picker("Сотрудник", selection: $staffId) {
-                    Text("Выбрать").tag("")
+                Picker(L("Сотрудник"), selection: $staffId) {
+                    Text(L("Выбрать")).tag("")
                     ForEach(store.business?.staff ?? []) { Text($0.name).tag($0.id) }
                 }
-                DatePicker("Начало", selection: $start)
-                DatePicker("Окончание", selection: $end, in: start...)
+                DatePicker(L("Начало"), selection: $start)
+                DatePicker(L("Окончание"), selection: $end, in: start...)
                 if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }.environment(\.timeZone, store.businessCalendar.timeZone)
                 .disabled(saving)
-                .navigationTitle("Недоступное время")
+                .navigationTitle(L("Недоступное время"))
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Сохранить") {
+                        Button(L("Сохранить")) {
                             Task {
                                 saving = true
                                 defer { saving = false }
@@ -609,7 +619,7 @@ private struct BlockForm: View {
                                         "endsAt":LiveBusinessStore.iso(end),"requestKey":requestKey])
                                     try await store.reload()
                                     dismiss()
-                                } catch { self.error = error.localizedDescription }
+                                } catch { self.error = localizedError(error) }
                             }
                         }.disabled(saving || staffId.isEmpty || end <= start)
                     }
@@ -619,6 +629,7 @@ private struct BlockForm: View {
 }
 
 private struct MoveBookingForm: View {
+    @Environment(\.locale) private var appLocale
     @ObservedObject var store: LiveBusinessStore
     let booking: RemoteBooking
     @Environment(\.dismiss) private var dismiss
@@ -630,15 +641,15 @@ private struct MoveBookingForm: View {
         NavigationStack {
             TorlyForm {
                 Text(booking.clientName ?? "")
-                DatePicker("Новые дата и время", selection: $start, in: Date()...)
+                DatePicker(L("Новые дата и время"), selection: $start, in: Date()...)
                 if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }.environment(\.timeZone, store.businessCalendar.timeZone)
                 .disabled(saving)
-                .navigationTitle("Перенести запись")
+                .navigationTitle(L("Перенести запись"))
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Перенести") {
+                        Button(L("Перенести")) {
                             Task {
                                 saving = true
                                 defer { saving = false }
@@ -648,7 +659,7 @@ private struct MoveBookingForm: View {
                                     store.day = start
                                     try await store.reload()
                                     dismiss()
-                                } catch { self.error = error.localizedDescription }
+                                } catch { self.error = localizedError(error) }
                             }
                         }.disabled(saving)
                     }

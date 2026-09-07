@@ -2,13 +2,59 @@ import SwiftUI
 
 @main
 struct TorlyApp: App {
+    @AppStorage("torly.language") private var language = "ru"
     init() { TorlyTheme.configureAppearance() }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .tint(TorlyTheme.accent)
+                .environment(\.locale, Locale(identifier: language))
+                .environment(\.layoutDirection, language == "he" ? .rightToLeft : .leftToRight)
         }
+    }
+}
+
+enum TorlyLanguage {
+    static let codes = ["he", "en", "es", "ru"]
+    static let names = ["he": "עברית", "en": "English", "es": "Español", "ru": "Русский"]
+    static var current: String {
+        let saved = UserDefaults.standard.string(forKey: "torly.language") ?? "ru"
+        return codes.contains(saved) ? saved : "ru"
+    }
+    static var locale: Locale { Locale(identifier: current) }
+}
+
+func L(_ key: String, _ arguments: CVarArg...) -> String {
+    let path = Bundle.main.path(forResource: TorlyLanguage.current, ofType: "lproj")
+    let bundle = path.flatMap(Bundle.init(path:)) ?? .main
+    let value = bundle.localizedString(forKey: key, value: key, table: "Localizable")
+    return arguments.isEmpty ? value : String(format: value, locale: TorlyLanguage.locale, arguments: arguments)
+}
+
+func localizedError(_ error: Error) -> String {
+    if error is URLError { return L("Не удалось подключиться. Проверь интернет и попробуй ещё раз.") }
+    return L(error.localizedDescription)
+}
+
+struct LanguagePicker: View {
+    @AppStorage("torly.language") private var language = "ru"
+    @Environment(\.locale) private var appLocale
+    var body: some View {
+        Picker(L("Язык приложения"), selection: $language) {
+            ForEach(TorlyLanguage.codes, id: \.self) { code in
+                Text(TorlyLanguage.names[code] ?? code).tag(code)
+            }
+        }
+    }
+}
+
+struct LanguageSettings: View {
+    @Environment(\.locale) private var appLocale
+    var body: some View {
+        TorlyForm {
+            Section(L("Язык")) { LanguagePicker() }
+        }.navigationTitle(L("Настройки"))
     }
 }
 
