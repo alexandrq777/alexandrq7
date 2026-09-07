@@ -353,8 +353,8 @@ struct TorlyValueRow: View {
 struct TorlyActionIcon: View {
     let name: String
     var body: some View {
-        Image(systemName: name).font(.system(size: 20, weight: .semibold))
-            .frame(minWidth: 48, minHeight: 48).contentShape(Rectangle())
+        Image(systemName: name).font(.system(size: 22, weight: .semibold))
+            .frame(minWidth: 56, minHeight: 48).contentShape(Rectangle())
     }
 }
 
@@ -423,9 +423,11 @@ private extension Color {
 }
 
 private struct TorlySurface: ViewModifier {
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content
-            .environment(\.defaultMinListRowHeight, 56)
+        let styled = content
+            .environment(\.defaultMinListRowHeight, 64)
+            .dynamicTypeSize(.xLarge ... .accessibility5)
             .headerProminence(.increased)
             .scrollContentBackground(.hidden)
             .background(TorlyTheme.background.ignoresSafeArea())
@@ -433,6 +435,11 @@ private struct TorlySurface: ViewModifier {
             .tint(TorlyTheme.accent)
             .toolbarBackground(TorlyTheme.surface, for: .navigationBar, .tabBar)
             .toolbarBackground(.visible, for: .navigationBar, .tabBar)
+        if #available(iOS 17.0, *) {
+            styled.listSectionSpacing(24)
+        } else {
+            styled
+        }
     }
 }
 
@@ -442,6 +449,7 @@ struct TorlyForm<Content: View>: View {
     var body: some View {
         Form {
             content
+                .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
                 .listRowBackground(TorlyTheme.panel)
                 .listRowSeparatorTint(TorlyTheme.border)
         }.toggleStyle(.switch).modifier(TorlySurface())
@@ -454,6 +462,7 @@ struct TorlyList<Content: View>: View {
     var body: some View {
         List {
             content
+                .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
                 .listRowBackground(TorlyTheme.panel)
                 .listRowSeparatorTint(TorlyTheme.border)
         }.listStyle(.insetGrouped).modifier(TorlySurface())
@@ -465,8 +474,9 @@ struct TorlyPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity, minHeight: 30)
-            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 32)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
             .foregroundStyle(TorlyTheme.background)
             .background(TorlyTheme.accent.opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.35))
             .clipShape(RoundedRectangle(cornerRadius: 8))

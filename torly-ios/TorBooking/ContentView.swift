@@ -96,7 +96,7 @@ struct ContentView: View {
                                     Image(systemName: "bell")
                                     let unread = store.alerts.filter { $0.readAt == nil }.count
                                     if unread > 0 { TorlyNumber(value: "\(unread)", font: .subheadline) }
-                                }.font(.system(size: 20, weight: .semibold)).frame(minWidth: 48, minHeight: 48).contentShape(Rectangle())
+                                }.font(.system(size: 22, weight: .semibold)).frame(minWidth: 56, minHeight: 48).contentShape(Rectangle())
                             }.accessibilityLabel(L("Уведомления"))
                         }
                         if store.alertBanner {
@@ -142,7 +142,7 @@ struct ContentView: View {
                         HStack(spacing: 12) {
                             Image(systemName: alert.readAt == nil ? "envelope.badge" : "envelope.open")
                                 .foregroundStyle(alert.readAt == nil ? TorlyTheme.accent : TorlyTheme.muted)
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: 8) {
                                 Text(L("Новая онлайн-запись")).font(.body.weight(alert.readAt == nil ? .semibold : .regular))
                                 Text(store.businesses.first { $0.id == alert.businessId }?.name ?? "Torly")
                                     .font(.body.bold()).foregroundStyle(.white)
@@ -268,7 +268,7 @@ struct ContentView: View {
     }
 
     private func bookingRow(_ booking: RemoteBooking) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 TorlyNumber(value: "\(store.time(booking.startsAt)) – \(store.time(booking.endsAt))", font: .headline)
                 Spacer()
@@ -291,7 +291,7 @@ struct ContentView: View {
                 .font(.subheadline).foregroundStyle(TorlyTheme.muted)
             HStack(spacing: 6) {
                 Circle().fill(TorlyTheme.statusColor(booking.status)).frame(width: 6, height: 6)
-                Text(booking.statusTitle).font(.caption.weight(.medium))
+                Text(booking.statusTitle).font(.subheadline.weight(.medium))
             }.foregroundStyle(TorlyTheme.statusColor(booking.status))
         }.padding(.vertical, 5)
     }
@@ -304,11 +304,11 @@ struct ContentView: View {
                     NavigationLink {
                         ClientDetailForm(store: store, client: client)
                     } label: {
-                        VStack(alignment: .leading, spacing: 5) {
+                        VStack(alignment: .leading, spacing: 9) {
                             Text(client.name).font(.body.bold()).foregroundStyle(.white)
                             TorlyNumber(value: client.phone, font: .subheadline)
                             if client.noShowCount > 0 {
-                                Label(L("Неявки: %d", client.noShowCount), systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(TorlyTheme.warning)
+                                Label(L("Неявки: %d", client.noShowCount), systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(TorlyTheme.warning)
                             }
                         }
                     }
@@ -329,7 +329,7 @@ struct ContentView: View {
                 ForEach(store.business?.services ?? []) { service in
                     Button { editingService = service } label: {
                         HStack {
-                            VStack(alignment: .leading, spacing: 5) {
+                            VStack(alignment: .leading, spacing: 9) {
                                 Text(service.name).font(.body.bold()).foregroundStyle(.white)
                                 if service.active { TorlyNumber(value: L("%d мин", service.minutes ?? 0), font: .subheadline) }
                                 else { Text(L("В архиве")).font(.subheadline).foregroundStyle(TorlyTheme.muted) }
