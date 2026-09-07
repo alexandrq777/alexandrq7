@@ -77,6 +77,7 @@ async function createBooking(pool, accountId, input, isPublic = false) {
           const entry = (await db.query("INSERT INTO calendar_entries(business_id,staff_id,service_id,client_id,kind,starts_at,ends_at,service_name,price_minor,currency,request_key,request_hash) VALUES($1,$2,$3,$4,'booking',$5,$6,$7,$8,$9,$10,$11) RETURNING *", [business.id, staff.id, service.id, client.id, input.startsAt, end, service.name, service.price_minor, business.currency, input.requestKey, hash])).rows[0];
           await db.query("INSERT INTO notification_jobs(booking_id,channel,run_at) VALUES($1,'whatsapp',$2)", [entry.id, DateTime.fromISO(input.startsAt).minus({ hours: 2 }).toUTC().toISO()]);
           await db.query("SELECT pg_notify('torly_calendar',$1)", [business.id]);
+          if (isPublic) await db.query("SELECT pg_notify('torly_online_booking',$1)", [business.id]);
           return entry;
         });
 
@@ -96,9 +97,11 @@ export async function createAPI(pool) {
   const subscribers = new Set();
   const events = await pool.connect();
   await events.query('LISTEN torly_calendar');
+  await events.query('LISTEN torly_online_booking');
   events.on?.('notification', message => {
+    const event = message.channel === 'torly_online_booking' ? 'online-booking' : 'calendar';
     for (const stream of subscribers) {
-      if (stream.businessIds.has(message.payload)) stream.res.write('event: calendar\ndata: changed\n\n');
+      if (stream.businessIds.has(message.payload)) stream.res.write(`event: ${event}\ndata: changed\n\n`);
     }
   });
   // If the database listener disconnects, close streams so clients reconnect and refetch.

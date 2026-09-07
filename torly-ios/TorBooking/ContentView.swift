@@ -4,6 +4,7 @@ struct ContentView: View {
     @Environment(\.locale) private var appLocale
     @StateObject private var store = LiveBusinessStore()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("torly.privatePreview") private var privatePreview = true
     @State private var email = ""
     @State private var password = ""
     @State private var registering = false
@@ -43,7 +44,13 @@ struct ContentView: View {
                     clients.tabItem { Label(L("Клиенты"), systemImage: "person.2") }
                     services.tabItem { Label(L("Услуги"), systemImage: "scissors") }
                     business.tabItem { Label(L("Бизнес"), systemImage: "building.2") }
-                    NavigationStack { LanguageSettings() }.tabItem { Label(L("Настройки"), systemImage: "gearshape") }
+                    NavigationStack { AppSettings(store: store) }.tabItem { Label(L("Настройки"), systemImage: "gearshape") }
+                }
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    HStack { TorlyBrand(); Spacer() }
+                        .padding(.horizontal, 20).padding(.vertical, 8)
+                        .background(TorlyTheme.surface)
+                        .overlay(alignment: .bottom) { Rectangle().fill(TorlyTheme.border).frame(height: 1) }
                 }
             }
         }
@@ -54,7 +61,10 @@ struct ContentView: View {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }
         .task { await store.restore() }
-        .onChange(of: scenePhase) { store.setActive($0 == .active) }
+        .onChange(of: scenePhase) {
+            TorlyPrivacyShield.update(hidden: privatePreview && $0 != .active)
+            store.setActive($0 == .active)
+        }
         .sheet(isPresented: $showBooking) { LiveBookingForm(store: store) }
         .sheet(isPresented: $showService) { LiveServiceForm(store: store, service: nil) }
         .sheet(item: $editingService) { LiveServiceForm(store: store, service: $0) }

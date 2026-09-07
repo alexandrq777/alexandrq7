@@ -1,5 +1,6 @@
 import SwiftUI
 import Security
+import UserNotifications
 
 struct RemoteService: Decodable, Identifiable, Hashable {
     let id: String
@@ -193,6 +194,8 @@ final class LiveBusinessStore: ObservableObject {
     }
 
     func clearSession() {
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         streamTask?.cancel()
         streamTask = nil
         try? SessionKeychain.save(nil, account: serverAddress)
@@ -303,6 +306,7 @@ final class LiveBusinessStore: ObservableObject {
                     for try await line in bytes.lines {
                         try Task.checkCancellation()
                         if line == "event: calendar" { try await self.reload() }
+                        if line == "event: online-booking" { await TorlyNotifications.shared.send() }
                     }
                 } catch {
                     if Task.isCancelled { return }

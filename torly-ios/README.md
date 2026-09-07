@@ -48,3 +48,15 @@ See `Docs/server-architecture.md` and `Server/TorlyAPI/README.md`.
 
 Legacy uppercase booking links remain supported. New links use lowercase slugs;
 booking pages support GET and HEAD with HTML content types for browser/share previews.
+
+The original icon and Torly wordmark appear above the signed-in tabs. Settings now
+include four languages, notification authorization and a local test, notification
+sound and haptic preferences, an app-switcher privacy cover, data visibility
+information, refresh, sign-out confirmation and version information.
+
+While the app is active and its SSE connection is live, a new public booking emits
+a private-data-free local notification (with permission). This works for any booking
+date, not just the visible calendar day. Reconnects do not replay alerts. Background
+APNs delivery is NOT implemented: an APNs key/capability, device registration and a
+server delivery worker are still required. The notification test proves only local
+iPhone permission, not remote push delivery. iOS Focus and sound settings still apply.

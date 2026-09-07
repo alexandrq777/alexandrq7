@@ -131,8 +131,17 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
       try {
         const results=await Promise.all([1,2].map(()=>request(publicPath+'/bookings','POST',{...publicInput,startsAt:publicSlots[2],requestKey:randomUUID()})));
         assert.deepEqual(results.map(r=>r.status).sort(),[201,409]);
-        const event=await Promise.race([reader.read(),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Public booking SSE timeout')),5000);})]);
-        assert(new TextDecoder().decode(event.value).includes('event: calendar'));
+        const received = await Promise.race([(async () => {
+          let text = '';
+          while (!text.includes('event: calendar') || !text.includes('event: online-booking')) {
+            const event = await reader.read();
+            assert(!event.done);
+            text += new TextDecoder().decode(event.value);
+          }
+          return text;
+        })(), new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Public booking SSE timeout')),5000);})]);
+        assert.equal(received.split('event: online-booking').length - 1, 1);
+        assert(!received.includes(publicInput.clientName));
       } finally {clearTimeout(timeout);controller.abort();}
     }
     assert.equal((await request(publicPath+'/availability?'+new URLSearchParams({staffId:fresh.staff[0].id,serviceId:freshService.body.service.id,date:'2099-01-01'}))).status,400);

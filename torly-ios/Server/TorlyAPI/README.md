@@ -55,6 +55,10 @@ JSON uses snake_case in database responses and camelCase in mutation inputs.
 - `PUT /v1/staff/:id/hours`: array of `{weekday,opensAt,closesAt}`; 0=Sunday.
   Omitted days are closed. Changes affect future availability; existing appointments remain.
 - `GET /v1/events`: authenticated SSE; calendar events trigger a client refetch.
+  A separate `online-booking` event is emitted after a new public booking commits,
+  only to the owner's business-scoped streams. It contains no client data and is
+  not emitted for idempotent retries, owner-created appointments or service edits.
+  This live signal is not durable background push; APNs delivery remains pending.
 
 Errors: 400 validation, 401 session, 404 inaccessible resource, 409 conflict,
 429 login throttling, 500 unavailable. Unauthenticated writes and arbitrary

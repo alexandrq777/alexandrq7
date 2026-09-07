@@ -1,7 +1,9 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct TorlyApp: App {
+    @UIApplicationDelegateAdaptor(TorlyAppDelegate.self) private var appDelegate
     @AppStorage("torly.language") private var language = "ru"
     init() { TorlyTheme.configureAppearance() }
 
@@ -49,12 +51,168 @@ struct LanguagePicker: View {
     }
 }
 
-struct LanguageSettings: View {
+struct TorlyBrand: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(uiImage: UIImage(named: "Torly-AppIcon-1024.png") ?? UIImage())
+                .resizable().scaledToFit().frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .accessibilityHidden(true)
+            Text("Torly").font(.title2.bold()).foregroundStyle(TorlyTheme.accent)
+        }.accessibilityElement(children: .combine)
+    }
+}
+
+@MainActor
+enum TorlyPrivacyShield {
+    private static var covers: [UIView] = []
+    static func update(hidden: Bool) {
+        covers.forEach { $0.removeFromSuperview() }
+        covers = []
+        guard hidden else { return }
+        // Cover the window itself so presented forms are hidden in snapshots too.
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            for window in scene.windows where window.isKeyWindow {
+                let cover = UIView(frame: window.bounds)
+                cover.backgroundColor = UIColor(TorlyTheme.background)
+                cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                let name = UILabel()
+                name.text = "Torly"
+                name.font = .boldSystemFont(ofSize: 28)
+                name.textColor = UIColor(TorlyTheme.accent)
+                name.translatesAutoresizingMaskIntoConstraints = false
+                cover.addSubview(name)
+                NSLayoutConstraint.activate([name.centerXAnchor.constraint(equalTo: cover.centerXAnchor), name.centerYAnchor.constraint(equalTo: cover.centerYAnchor)])
+                window.addSubview(cover)
+                covers.append(cover)
+            }
+        }
+    }
+}
+
+final class TorlyAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler(UserDefaults.standard.object(forKey: "torly.sounds") as? Bool ?? true ? [.banner, .list, .sound] : [.banner, .list])
+    }
+}
+
+@MainActor
+final class TorlyNotifications: ObservableObject {
+    static let shared = TorlyNotifications()
+    @Published var authorization: UNAuthorizationStatus = .notDetermined
+    @Published var error: String?
+    @Published var testing = false
+    var allowed: Bool { authorization == .authorized || authorization == .provisional || authorization == .ephemeral }
+
+    func refresh() async {
+        authorization = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
+    func requestPermission() async {
+        do { _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) }
+        catch { self.error = localizedError(error) }
+        await refresh()
+    }
+
+    func send(test: Bool = false) async {
+        guard test || (UserDefaults.standard.object(forKey: "torly.bookingAlerts") as? Bool ?? true) else { return }
+        await refresh()
+        guard allowed else { return }
+        let content = UNMutableNotificationContent()
+        content.title = test ? L("Проверка уведомлений") : L("Новая онлайн-запись")
+        content.body = test ? L("Уведомления на этом устройстве разрешены.") : L("Клиент записался через вашу ссылку.")
+        if UserDefaults.standard.object(forKey: "torly.sounds") as? Bool ?? true { content.sound = .default }
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content,
+                                             trigger: test ? UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false) : nil)
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+            if UserDefaults.standard.object(forKey: "torly.haptics") as? Bool ?? true {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        } catch { self.error = localizedError(error) }
+    }
+}
+
+struct AppSettings: View {
+    @ObservedObject var store: LiveBusinessStore
+    @ObservedObject private var notifications = TorlyNotifications.shared
     @Environment(\.locale) private var appLocale
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
+    @AppStorage("torly.bookingAlerts") private var bookingAlerts = true
+    @AppStorage("torly.sounds") private var sounds = true
+    @AppStorage("torly.haptics") private var haptics = true
+    @AppStorage("torly.privatePreview") private var privatePreview = true
+    @State private var confirmSignOut = false
+
     var body: some View {
         TorlyForm {
             Section(L("Язык")) { LanguagePicker() }
+            Section(L("Уведомления")) {
+                LabeledContent(L("Разрешение iPhone"), value: notifications.allowed ? L("Разрешено") : L("Не разрешено"))
+                if notifications.authorization == .notDetermined {
+                    Button(L("Разрешить уведомления"), systemImage: "bell.badge") {
+                        Task { await notifications.requestPermission() }
+                    }
+                } else {
+                    Button(L("Настройки iPhone"), systemImage: "arrow.up.forward.app") { openSystemSettings() }
+                }
+                Toggle(L("Новые онлайн-записи"), isOn: $bookingAlerts)
+                LabeledContent(L("При открытом приложении"), value: store.connected ? L("Подключено") : L("Нет соединения"))
+                LabeledContent(L("Push в фоне"), value: L("Не подключён"))
+                Button(L("Проверить уведомление"), systemImage: "bell.and.waves.left.and.right") {
+                    Task {
+                        notifications.testing = true
+                        await notifications.send(test: true)
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        notifications.testing = false
+                    }
+                }.disabled(!notifications.allowed || notifications.testing)
+            }
+            Section(L("Звуки и отклик")) {
+                Toggle(L("Звук уведомлений"), isOn: $sounds)
+                Toggle(L("Тактильный отклик"), isOn: $haptics)
+            }
+            Section(L("Конфиденциальность")) {
+                Toggle(L("Скрывать экран в переключателе приложений"), isOn: $privatePreview)
+                NavigationLink {
+                    TorlyForm {
+                        Section(L("Данные аккаунта")) { Text(L("Данные бизнеса и записей хранятся на сервере Torly. Доступ к аккаунту защищён паролем; ключ сеанса хранится в Связке ключей iPhone.")) }
+                        Section(L("Онлайн-профиль")) { Text(L("При публикации имя бизнеса, адрес, телефон, услуги и свободное время доступны по ссылке записи. Публикацию можно отключить в разделе бизнеса.")) }
+                        Section(L("Уведомления")) { Text(L("Уведомления не содержат имён, телефонов или названий услуг клиентов.")) }
+                    }.navigationTitle(L("Данные и доступ"))
+                } label: { Label(L("Данные и доступ"), systemImage: "hand.raised") }
+            }
+            Section(L("Аккаунт")) {
+                LabeledContent(L("Сервер"), value: URL(string: store.serverAddress)?.host ?? "")
+                Button(L("Обновить данные"), systemImage: "arrow.clockwise") { Task { await store.perform { try await store.reload() } } }
+                    .disabled(store.busy)
+                Button(L("Выйти"), role: .destructive) { confirmSignOut = true }
+            }
+            Section(L("О приложении")) {
+                LabeledContent("Torly", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
+            }
         }.navigationTitle(L("Настройки"))
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await notifications.refresh() }
+            .onChange(of: scenePhase) { if $0 == .active { Task { await notifications.refresh() } } }
+            .confirmationDialog(L("Выйти из аккаунта?"), isPresented: $confirmSignOut, titleVisibility: .visible) {
+                Button(L("Выйти"), role: .destructive) { Task { await store.signOut() } }
+                Button(L("Отмена"), role: .cancel) { }
+            }
+            .alert("Torly", isPresented: Binding(get: { notifications.error != nil }, set: { if !$0 { notifications.error = nil } })) {
+                Button("OK") { notifications.error = nil }
+            } message: { Text(notifications.error ?? "") }
+    }
+
+    private func openSystemSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
     }
 }
 
