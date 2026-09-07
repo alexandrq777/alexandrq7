@@ -59,6 +59,13 @@ JSON uses snake_case in database responses and camelCase in mutation inputs.
   only to the owner's business-scoped streams. It contains no client data and is
   not emitted for idempotent retries, owner-created appointments or service edits.
   This live signal is not durable background push; APNs delivery remains pending.
+- `GET /v1/alerts`: owner-scoped inbox, up to 100 entries with unread entries first.
+  Contains identifiers, booking start and creation/read times, no client contact data.
+- `POST /v1/alerts/read`: {ids}, 1-100 UUIDs; marks only the authenticated owner's
+  entries read. Migration 002 stores one alert per new public booking in the booking
+  transaction. Retries and rejected overlaps cannot create duplicates. Older
+  bookings are not backfilled. Native foreground polling/reconnect uses this inbox;
+  it does not provide delivery while iOS has suspended the app.
 
 Errors: 400 validation, 401 session, 404 inaccessible resource, 409 conflict,
 429 login throttling, 500 unavailable. Unauthenticated writes and arbitrary

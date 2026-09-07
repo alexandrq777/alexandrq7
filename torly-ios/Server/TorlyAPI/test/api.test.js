@@ -17,7 +17,7 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
     pg = new PGlite({ extensions: { btree_gist } });
   }
   const query = async (sql, params = []) => {
-    if (!params.length && sql.includes('CREATE EXTENSION')) return pg.exec(sql);
+    if (!params.length && /^\s*CREATE\b/i.test(sql)) return pg.exec(sql);
     const result = await pg.query(sql, params);
     return { rows: result.rows, rowCount: result.rows.length || result.affectedRows || 0 };
   };
@@ -46,6 +46,7 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
   };
   try {
     assert.equal((await request('/v1/owner')).status,401);
+    assert.equal((await request('/v1/alerts')).status,401);
     assert.equal((await request('/v1/session','POST',{email:'owner1@example.com',password:'wrong'})).status,401);
     const token = (await request('/v1/session','POST',{email:'owner1@example.com',password:'a-long-test-password'})).body.token;
     const token2 = (await request('/v1/session','POST',{email:'owner2@example.com',password:'a-long-test-password'})).body.token;
@@ -119,6 +120,18 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
     assert.equal(publicBooking.status,201,JSON.stringify(publicBooking.body));
     assert.deepEqual(Object.keys(publicBooking.body.booking).sort(),['ends_at','id','service_name','starts_at','status']);
     assert.equal((await request(publicPath+'/bookings','POST',publicInput)).body.booking.id,publicBooking.body.booking.id);
+    const inbox = (await request('/v1/alerts','GET',null,freshToken)).body.alerts;
+    assert.equal(inbox.length,1,'idempotent booking creates one durable alert');
+    assert.equal(inbox[0].booking_id,publicBooking.body.booking.id);
+    assert.equal(inbox[0].read_at,null);
+    assert(!JSON.stringify(inbox).includes(publicInput.clientPhone));
+    assert.deepEqual((await request('/v1/alerts','GET',null,token2)).body.alerts,[]);
+    assert.deepEqual((await request('/v1/alerts','GET',null,token)).body.alerts,[], 'manual bookings do not create online booking alerts');
+    await request('/v1/alerts/read','POST',{ids:[inbox[0].id]},token2);
+    assert.equal((await request('/v1/alerts','GET',null,freshToken)).body.alerts[0].read_at,null,'another owner cannot mark an alert read');
+    assert.equal((await request('/v1/alerts/read','POST',{ids:[]},freshToken)).status,400);
+    assert.equal((await request('/v1/alerts/read','POST',{ids:[inbox[0].id]},freshToken)).status,200);
+    assert((await request('/v1/alerts','GET',null,freshToken)).body.alerts[0].read_at);
     assert.equal((await request(publicPath+'/bookings','POST',{...publicInput,requestKey:randomUUID()})).status,409);
     assert(!(await request(availablePath)).body.slots.includes(publicSlots[0]));
     assert.equal((await request(publicPath+'/bookings','POST',{...publicInput,staffId:randomUUID(),requestKey:randomUUID()})).status,404);

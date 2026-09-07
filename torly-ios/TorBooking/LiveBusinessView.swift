@@ -59,6 +59,15 @@ struct RemoteBooking: Decodable, Identifiable {
 
 private struct OwnerResponse: Decodable { let businesses: [RemoteBusiness] }
 private struct BookingResponse: Decodable { let bookings: [RemoteBooking] }
+struct BookingAlert: Decodable, Identifiable {
+    let id: String
+    let businessId: String
+    let bookingId: String
+    let createdAt: String
+    let readAt: String?
+    let startsAt: String
+}
+private struct AlertsResponse: Decodable { let alerts: [BookingAlert] }
 private struct SlotResponse: Decodable { let slots: [String] }
 private struct SessionResponse: Decodable { let token: String }
 private struct APIMessage: Decodable { let error: String? }
@@ -120,6 +129,11 @@ final class LiveBusinessStore: ObservableObject {
     @Published var loaded = false
     @Published var clients: [RemoteClient] = []
     @Published var categories: [RemoteCategory] = []
+    @Published var alerts: [BookingAlert] = []
+    @Published var alertBanner = false
+    @Published var alertsError: String?
+    private var alertPollTask: Task<Void, Never>?
+    private var loadingAlerts = false
     private var token: String?
     private var baseURL: URL?
     private var streamTask: Task<Void, Never>?
@@ -194,6 +208,11 @@ final class LiveBusinessStore: ObservableObject {
     }
 
     func clearSession() {
+        alertPollTask?.cancel()
+        alertPollTask = nil
+        alerts = []
+        alertBanner = false
+        alertsError = nil
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
         streamTask?.cancel()
@@ -286,12 +305,54 @@ final class LiveBusinessStore: ObservableObject {
     func setActive(_ value: Bool) {
         active = value
         if value && signedIn { startEvents() }
-        else { streamTask?.cancel(); streamTask = nil; connected = false }
+        else {
+            streamTask?.cancel(); streamTask = nil; connected = false
+            alertPollTask?.cancel(); alertPollTask = nil
+        }
+    }
+
+    func loadAlerts() async {
+        guard signedIn, loaded, !loadingAlerts else { return }
+        loadingAlerts = true
+        defer { loadingAlerts = false }
+        do {
+            let data = try await request("/v1/alerts")
+            let incoming = try decoder.decode(AlertsResponse.self, from: data).alerts
+            alerts = incoming
+            alertsError = nil
+            let key = "torly.seenAlerts." + serverAddress
+            let previous = UserDefaults.standard.stringArray(forKey: key) ?? []
+            let seen = Set(previous)
+            let newAlerts = incoming.filter { $0.readAt == nil && !seen.contains($0.id) }
+            guard !newAlerts.isEmpty else { return }
+            if UserDefaults.standard.object(forKey: "torly.inAppAlerts") as? Bool ?? true { alertBanner = true }
+            // The inbox retains unread alerts independently of OS permission or SSE delivery.
+            await TorlyNotifications.shared.send()
+            let currentIds = Set(incoming.map(\.id))
+            UserDefaults.standard.set(Array((previous.filter { !currentIds.contains($0) } + incoming.map(\.id)).suffix(1000)), forKey: key)
+        } catch is CancellationError { }
+        catch { alertsError = localizedError(error) }
+    }
+
+    func readAlerts(_ ids: [String]) async {
+        guard !ids.isEmpty else { return }
+        await perform {
+            _ = try await self.request("/v1/alerts/read", method: "POST", body: ["ids": ids])
+            await self.loadAlerts()
+        }
     }
 
     private func startEvents() {
         streamTask?.cancel()
         guard active, let baseURL, let token else { return }
+        alertPollTask?.cancel()
+        alertPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.signedIn else { return }
+                await self.loadAlerts()
+                do { try await Task.sleep(nanoseconds: 15_000_000_000) } catch { return }
+            }
+        }
         streamTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self, self.signedIn else { return }
@@ -306,7 +367,7 @@ final class LiveBusinessStore: ObservableObject {
                     for try await line in bytes.lines {
                         try Task.checkCancellation()
                         if line == "event: calendar" { try await self.reload() }
-                        if line == "event: online-booking" { await TorlyNotifications.shared.send() }
+                        if line == "event: online-booking" { await self.loadAlerts() }
                     }
                 } catch {
                     if Task.isCancelled { return }

@@ -55,11 +55,120 @@ struct TorlyBrand: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(uiImage: UIImage(named: "Torly-AppIcon-1024.png") ?? UIImage())
-                .resizable().scaledToFit().frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .resizable().scaledToFit().frame(width: 34, height: 34)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .accessibilityHidden(true)
-            Text("Torly").font(.title2.bold()).foregroundStyle(TorlyTheme.accent)
+            Text("Torly").font(.system(.title2, design: .rounded, weight: .bold)).foregroundStyle(TorlyTheme.accent)
         }.accessibilityElement(children: .combine)
+    }
+}
+
+struct TorlyLoading: View {
+    var compact = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var walking = false
+    @State private var arrived = false
+    @State private var confirmed = false
+    var body: some View {
+        VStack(spacing: compact ? 0 : 22) {
+            ZStack {
+                Image(uiImage: UIImage(named: "Torly-AppIcon-1024.png") ?? UIImage())
+                    .resizable().scaledToFit().frame(width: compact ? 22 : 112, height: compact ? 22 : 112)
+                    .clipShape(RoundedRectangle(cornerRadius: compact ? 5 : 24))
+                    .overlay {
+                        if !compact {
+                            ZStack {
+                                Circle().fill(TorlyTheme.success)
+                                Image(systemName: "checkmark").font(.system(size: 20, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .scaleEffect(confirmed ? 1 : 0.1).opacity(confirmed ? 1 : 0)
+                            }.frame(width: 38, height: 38).offset(x: 30, y: 16)
+                        }
+                    }
+                    .rotationEffect(.degrees(reduceMotion || arrived ? 0 : (walking ? 7 : -7)))
+                    .offset(x: reduceMotion || arrived ? 0 : (walking ? (compact ? 1 : 5) : (compact ? -1 : -5)), y: reduceMotion || arrived ? 0 : (walking ? (compact ? -1 : -5) : 0))
+            }.frame(width: compact ? 28 : 140, height: compact ? 28 : 140)
+            if !compact {
+                Text("Torly").font(.system(size: 38, weight: .bold, design: .rounded))
+                    .foregroundStyle(TorlyTheme.accent)
+            }
+        }
+        .frame(maxWidth: compact ? nil : .infinity, maxHeight: compact ? nil : .infinity)
+        .background((compact ? Color.clear : TorlyTheme.background).ignoresSafeArea())
+        .accessibilityElement(children: .ignore).accessibilityLabel("Torly")
+        .task {
+            if !reduceMotion { withAnimation(compact ? .easeInOut(duration: 0.25).repeatForever(autoreverses: true) : .easeInOut(duration: 0.18).repeatCount(6, autoreverses: true)) { walking = true } }
+            if compact { return }
+            try? await Task.sleep(nanoseconds: 1_150_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { arrived = true }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.65)) { confirmed = true }
+        }
+    }
+}
+
+@MainActor
+final class TorlyTouchFeedback: NSObject, UIGestureRecognizerDelegate {
+    static let shared = TorlyTouchFeedback()
+    private weak var installedWindow: UIWindow?
+    private let tap = UITapGestureRecognizer()
+    private let pan = UIPanGestureRecognizer()
+    private let impact = UIImpactFeedbackGenerator(style: .soft)
+    private let selection = UISelectionFeedbackGenerator()
+    private var lastDistance: CGFloat = 0
+    private var lastTick: CFTimeInterval = 0
+    private var scrolling = false
+
+    func install() {
+        guard let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
+            .flatMap(\.windows).first(where: \.isKeyWindow), window !== installedWindow else { return }
+        installedWindow?.removeGestureRecognizer(tap)
+        installedWindow?.removeGestureRecognizer(pan)
+        tap.removeTarget(nil, action: nil)
+        pan.removeTarget(nil, action: nil)
+        tap.addTarget(self, action: #selector(tapped))
+        pan.addTarget(self, action: #selector(panned))
+        for gesture in [tap, pan] {
+            gesture.cancelsTouchesInView = false
+            gesture.delaysTouchesBegan = false
+            gesture.delaysTouchesEnded = false
+            gesture.delegate = self
+            window.addGestureRecognizer(gesture)
+        }
+        installedWindow = window
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        if gestureRecognizer === pan {
+            var view = touch.view
+            while let current = view {
+                if current is UIScrollView { scrolling = true; return true }
+                view = current.superview
+            }
+            scrolling = false
+            return false
+        }
+        return true
+    }
+
+    @objc private func tapped() {
+        guard UserDefaults.standard.object(forKey: "torly.haptics") as? Bool ?? true else { return }
+        impact.impactOccurred(intensity: 0.45)
+        impact.prepare()
+    }
+
+    @objc private func panned() {
+        guard scrolling, UserDefaults.standard.object(forKey: "torly.scrollHaptics") as? Bool ?? true else { return }
+        if pan.state == .began { lastDistance = 0; selection.prepare() }
+        let distance = pan.translation(in: installedWindow).y
+        let now = CACurrentMediaTime()
+        if pan.state == .changed && abs(distance - lastDistance) >= 80 && now - lastTick >= 0.16 {
+            selection.selectionChanged()
+            lastDistance = distance
+            lastTick = now
+        }
     }
 }
 
@@ -123,7 +232,7 @@ final class TorlyNotifications: ObservableObject {
     func send(test: Bool = false) async {
         guard test || (UserDefaults.standard.object(forKey: "torly.bookingAlerts") as? Bool ?? true) else { return }
         await refresh()
-        guard allowed else { return }
+        guard allowed, !Task.isCancelled else { return }
         let content = UNMutableNotificationContent()
         content.title = test ? L("Проверка уведомлений") : L("Новая онлайн-запись")
         content.body = test ? L("Уведомления на этом устройстве разрешены.") : L("Клиент записался через вашу ссылку.")
@@ -148,6 +257,8 @@ struct AppSettings: View {
     @AppStorage("torly.bookingAlerts") private var bookingAlerts = true
     @AppStorage("torly.sounds") private var sounds = true
     @AppStorage("torly.haptics") private var haptics = true
+    @AppStorage("torly.scrollHaptics") private var scrollHaptics = true
+    @AppStorage("torly.inAppAlerts") private var inAppAlerts = true
     @AppStorage("torly.privatePreview") private var privatePreview = true
     @State private var confirmSignOut = false
 
@@ -155,32 +266,40 @@ struct AppSettings: View {
         TorlyForm {
             Section(L("Язык")) { LanguagePicker() }
             Section(L("Уведомления")) {
-                LabeledContent(L("Разрешение iPhone"), value: notifications.allowed ? L("Разрешено") : L("Не разрешено"))
-                if notifications.authorization == .notDetermined {
-                    Button(L("Разрешить уведомления"), systemImage: "bell.badge") {
-                        Task { await notifications.requestPermission() }
-                    }
-                } else {
-                    Button(L("Настройки iPhone"), systemImage: "arrow.up.forward.app") { openSystemSettings() }
-                }
-                Toggle(L("Новые онлайн-записи"), isOn: $bookingAlerts)
-                LabeledContent(L("При открытом приложении"), value: store.connected ? L("Подключено") : L("Нет соединения"))
-                LabeledContent(L("Push в фоне"), value: L("Не подключён"))
-                Button(L("Проверить уведомление"), systemImage: "bell.and.waves.left.and.right") {
+                Toggle(isOn: $inAppAlerts) { Label(L("Баннеры в приложении"), systemImage: "app.badge") }
+                Toggle(isOn: Binding(get: { bookingAlerts && notifications.allowed }, set: { enabled in
+                    if !enabled { bookingAlerts = false; return }
                     Task {
-                        notifications.testing = true
-                        await notifications.send(test: true)
-                        try? await Task.sleep(nanoseconds: 3_000_000_000)
-                        notifications.testing = false
+                        await notifications.requestPermission()
+                        bookingAlerts = notifications.allowed
+                        if !notifications.allowed { openSystemSettings() }
                     }
-                }.disabled(!notifications.allowed || notifications.testing)
+                })) { Label(L("Уведомления iPhone"), systemImage: "bell") }
+                Toggle(isOn: $sounds) { Label(L("Звук уведомлений"), systemImage: "speaker.wave.2") }
+                NavigationLink {
+                    TorlyForm {
+                        Section {
+                            LabeledContent(L("Разрешение iPhone"), value: notifications.allowed ? L("Разрешено") : L("Не разрешено"))
+                            LabeledContent(L("Push в фоне"), value: L("Не подключён"))
+                            Button(L("Настройки iPhone"), systemImage: "arrow.up.forward.app") { openSystemSettings() }
+                            Button(L("Проверить уведомление"), systemImage: "bell.badge") {
+                                Task {
+                                    notifications.testing = true
+                                    await notifications.send(test: true)
+                                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                                    notifications.testing = false
+                                }
+                            }.disabled(!notifications.allowed || notifications.testing)
+                        }
+                    }.navigationTitle(L("Уведомления")).navigationBarTitleDisplayMode(.inline)
+                } label: { Label(L("Разрешения и проверка"), systemImage: "checkmark.shield") }
             }
             Section(L("Звуки и отклик")) {
-                Toggle(L("Звук уведомлений"), isOn: $sounds)
-                Toggle(L("Тактильный отклик"), isOn: $haptics)
+                Toggle(isOn: $haptics) { Label(L("Отклик при нажатии"), systemImage: "hand.tap") }
+                Toggle(isOn: $scrollHaptics) { Label(L("Отклик при прокрутке"), systemImage: "hand.draw") }
             }
             Section(L("Конфиденциальность")) {
-                Toggle(L("Скрывать экран в переключателе приложений"), isOn: $privatePreview)
+                Toggle(isOn: $privatePreview) { Label(L("Скрывать предпросмотр"), systemImage: "eye.slash") }
                 NavigationLink {
                     TorlyForm {
                         Section(L("Данные аккаунта")) { Text(L("Данные бизнеса и записей хранятся на сервере Torly. Доступ к аккаунту защищён паролем; ключ сеанса хранится в Связке ключей iPhone.")) }
@@ -190,7 +309,6 @@ struct AppSettings: View {
                 } label: { Label(L("Данные и доступ"), systemImage: "hand.raised") }
             }
             Section(L("Аккаунт")) {
-                LabeledContent(L("Сервер"), value: URL(string: store.serverAddress)?.host ?? "")
                 Button(L("Обновить данные"), systemImage: "arrow.clockwise") { Task { await store.perform { try await store.reload() } } }
                     .disabled(store.busy)
                 Button(L("Выйти"), role: .destructive) { confirmSignOut = true }
@@ -292,7 +410,7 @@ struct TorlyForm<Content: View>: View {
             content
                 .listRowBackground(TorlyTheme.surface)
                 .listRowSeparatorTint(TorlyTheme.border)
-        }.modifier(TorlySurface())
+        }.toggleStyle(.switch).modifier(TorlySurface())
     }
 }
 

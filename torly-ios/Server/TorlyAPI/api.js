@@ -77,7 +77,10 @@ async function createBooking(pool, accountId, input, isPublic = false) {
           const entry = (await db.query("INSERT INTO calendar_entries(business_id,staff_id,service_id,client_id,kind,starts_at,ends_at,service_name,price_minor,currency,request_key,request_hash) VALUES($1,$2,$3,$4,'booking',$5,$6,$7,$8,$9,$10,$11) RETURNING *", [business.id, staff.id, service.id, client.id, input.startsAt, end, service.name, service.price_minor, business.currency, input.requestKey, hash])).rows[0];
           await db.query("INSERT INTO notification_jobs(booking_id,channel,run_at) VALUES($1,'whatsapp',$2)", [entry.id, DateTime.fromISO(input.startsAt).minus({ hours: 2 }).toUTC().toISO()]);
           await db.query("SELECT pg_notify('torly_calendar',$1)", [business.id]);
-          if (isPublic) await db.query("SELECT pg_notify('torly_online_booking',$1)", [business.id]);
+          if (isPublic) {
+            await db.query('INSERT INTO booking_alerts(business_id,booking_id) VALUES($1,$2)', [business.id,entry.id]);
+            await db.query("SELECT pg_notify('torly_online_booking',$1)", [business.id]);
+          }
           return entry;
         });
 
@@ -288,6 +291,18 @@ export async function createAPI(pool) {
         await pool.query('DELETE FROM sessions WHERE token_hash=$1', [digest(token)]);
         for (const stream of subscribers) if (stream.tokenHash === digest(token)) stream.res.end();
         return send(res, 200, { ok: true });
+      }
+      if (req.method === 'GET' && path === '/v1/alerts') {
+        const alerts = (await pool.query(`SELECT a.id,a.business_id,a.booking_id,a.created_at,a.read_at,e.starts_at
+          FROM booking_alerts a JOIN businesses b ON b.id=a.business_id JOIN calendar_entries e ON e.id=a.booking_id
+          WHERE b.owner_id=$1 ORDER BY (a.read_at IS NULL) DESC,a.created_at DESC,a.id DESC LIMIT 100`, [accountId])).rows;
+        return send(res,200,{alerts});
+      }
+      if (req.method === 'POST' && path === '/v1/alerts/read') {
+        const {ids} = z.object({ids:z.array(uuid).min(1).max(100)}).parse(await body(req));
+        await pool.query(`UPDATE booking_alerts SET read_at=coalesce(read_at,now())
+          WHERE id=ANY($1::uuid[]) AND business_id IN (SELECT id FROM businesses WHERE owner_id=$2)`, [ids,accountId]);
+        return send(res,200,{ok:true});
       }
       if (req.method === 'GET' && path === '/v1/events') {
         const rows = (await pool.query('SELECT id FROM businesses WHERE owner_id=$1', [accountId])).rows;

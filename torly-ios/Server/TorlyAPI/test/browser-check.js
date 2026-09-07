@@ -10,7 +10,7 @@ import { createAPI } from '../api.js';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const pg=new PGlite({extensions:{btree_gist}});
 const query=async(sql,params=[])=>{
- if(!params.length&&sql.includes('CREATE EXTENSION'))return pg.exec(sql);
+ if(!params.length&&/^\s*CREATE\b/i.test(sql))return pg.exec(sql);
  const r=await pg.query(sql,params);return {rows:r.rows,rowCount:r.rows.length||r.affectedRows||0};
 };
 const pool={query,connect:async()=>Object.assign(new EventEmitter(),{query,release(){}})};

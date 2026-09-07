@@ -16,6 +16,9 @@ struct ContentView: View {
     @State private var moving: RemoteBooking?
     @State private var staffFilter = ""
     @State private var search = ""
+    @State private var launching = true
+    @State private var selectedTab = 0
+    @State private var showAlerts = false
 
     var body: some View {
         Group {
@@ -23,10 +26,12 @@ struct ContentView: View {
             else if !store.loaded {
                 NavigationStack {
                     VStack(spacing: 20) {
-                        if store.busy { ProgressView() }
-                        Text(L("Загрузка аккаунта")).font(.headline)
-                        Button(L("Повторить")) { Task { await store.perform { try await store.reload() } } }
-                        Button(L("Выйти")) { Task { await store.signOut() } }
+                        if store.busy { TorlyLoading() }
+                        else {
+                            Text(L("Загрузка аккаунта")).font(.headline)
+                            Button(L("Повторить")) { Task { await store.perform { try await store.reload() } } }
+                            Button(L("Выйти")) { Task { await store.signOut() } }
+                        }
                     }.navigationTitle("Torly")
                 }
             } else if store.business == nil {
@@ -39,15 +44,38 @@ struct ContentView: View {
                         }
                 }
             } else {
-                TabView {
-                    calendar.tabItem { Label(L("Календарь"), systemImage: "calendar") }
-                    clients.tabItem { Label(L("Клиенты"), systemImage: "person.2") }
-                    services.tabItem { Label(L("Услуги"), systemImage: "scissors") }
-                    business.tabItem { Label(L("Бизнес"), systemImage: "building.2") }
-                    NavigationStack { AppSettings(store: store) }.tabItem { Label(L("Настройки"), systemImage: "gearshape") }
+                TabView(selection: $selectedTab) {
+                    calendar.tabItem { Label(L("Календарь"), systemImage: "calendar") }.tag(0)
+                    clients.tabItem { Label(L("Клиенты"), systemImage: "person.2") }.tag(1)
+                    services.tabItem { Label(L("Услуги"), systemImage: "scissors") }.tag(2)
+                    business.tabItem { Label(L("Бизнес"), systemImage: "building.2") }.tag(3)
+                    NavigationStack { AppSettings(store: store) }.tabItem { Label(L("Настройки"), systemImage: "gearshape") }.tag(4)
                 }
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    HStack { TorlyBrand(); Spacer() }
+                    VStack(spacing: 8) {
+                        HStack {
+                            TorlyBrand()
+                            Spacer()
+                            if store.busy { TorlyLoading(compact: true) }
+                            Button { showAlerts = true } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "bell")
+                                    let unread = store.alerts.filter { $0.readAt == nil }.count
+                                    if unread > 0 { Text("\(unread)").font(.caption.bold()) }
+                                }.frame(minWidth: 44, minHeight: 44)
+                            }.accessibilityLabel(L("Уведомления"))
+                        }
+                        if store.alertBanner {
+                            HStack {
+                                Button { showAlerts = true; store.alertBanner = false } label: {
+                                    Label(L("Новая онлайн-запись"), systemImage: "calendar.badge.plus")
+                                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                Button { store.alertBanner = false } label: { Image(systemName: "xmark").frame(width: 44, height: 36) }
+                                    .accessibilityLabel(L("Закрыть"))
+                            }
+                        }
+                    }
                         .padding(.horizontal, 20).padding(.vertical, 8)
                         .background(TorlyTheme.surface)
                         .overlay(alignment: .bottom) { Rectangle().fill(TorlyTheme.border).frame(height: 1) }
@@ -60,9 +88,18 @@ struct ContentView: View {
         .alert("Torly", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }
-        .task { await store.restore() }
+        .overlay { if launching { TorlyLoading().transition(.opacity) } }
+        .task {
+            TorlyTouchFeedback.shared.install()
+            async let restored: Void = store.restore()
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            withAnimation(.easeOut(duration: 0.2)) { launching = false }
+            await restored
+            TorlyTouchFeedback.shared.install()
+        }
         .onChange(of: scenePhase) {
             TorlyPrivacyShield.update(hidden: privatePreview && $0 != .active)
+            if $0 == .active { TorlyTouchFeedback.shared.install() }
             store.setActive($0 == .active)
         }
         .sheet(isPresented: $showBooking) { LiveBookingForm(store: store) }
@@ -71,6 +108,60 @@ struct ContentView: View {
         .sheet(isPresented: $showStaff) { StaffCreationForm(store: store) }
         .sheet(isPresented: $showBlock) { BlockForm(store: store) }
         .sheet(item: $moving) { MoveBookingForm(store: store, booking: $0) }
+        .sheet(isPresented: $showAlerts) { notificationInbox }
+    }
+
+    private var notificationInbox: some View {
+        NavigationStack {
+            TorlyList {
+                if let error = store.alertsError {
+                    Section { Text(error).foregroundStyle(TorlyTheme.warning) }
+                }
+                if store.alerts.isEmpty && store.alertsError == nil {
+                    EmptyRow(title: L("Уведомлений пока нет"), symbol: "bell")
+                }
+                ForEach(store.alerts) { alert in
+                    Button {
+                        store.selectedBusinessId = alert.businessId
+                        staffFilter = ""
+                        let formatter = ISO8601DateFormatter()
+                        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                        store.day = formatter.date(from: alert.startsAt) ?? ISO8601DateFormatter().date(from: alert.startsAt) ?? Date()
+                        selectedTab = 0
+                        showAlerts = false
+                        store.alertBanner = false
+                        Task {
+                            await store.readAlerts([alert.id])
+                            await store.perform { try await store.loadBookings() }
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: alert.readAt == nil ? "envelope.badge" : "envelope.open")
+                                .foregroundStyle(alert.readAt == nil ? TorlyTheme.accent : TorlyTheme.muted)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(L("Новая онлайн-запись")).font(.body.weight(alert.readAt == nil ? .semibold : .regular))
+                                Text(store.businesses.first { $0.id == alert.businessId }?.name ?? "Torly")
+                                    .font(.caption).foregroundStyle(TorlyTheme.muted)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.forward").font(.caption)
+                        }.padding(.vertical, 4)
+                    }
+                }
+            }.navigationTitle(L("Уведомления")).navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button(L("Закрыть")) { showAlerts = false } }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            Task { await store.readAlerts(store.alerts.filter { $0.readAt == nil }.map(\.id)); store.alertBanner = false }
+                        } label: { Image(systemName: "checkmark.circle") }
+                            .accessibilityLabel(L("Отметить прочитанными"))
+                            .disabled(store.busy || !store.alerts.contains { $0.readAt == nil })
+                    }
+                }
+                .task { await store.loadAlerts() }
+                .refreshable { await store.loadAlerts() }
+        }
     }
 
     private var login: some View {
@@ -83,7 +174,7 @@ struct ContentView: View {
                            let icon = UIImage(contentsOfFile: path) {
                             Image(uiImage: icon).resizable().frame(width: 76, height: 76).clipShape(RoundedRectangle(cornerRadius: 18))
                         }
-                        Text("Torly").font(.largeTitle.bold()).foregroundStyle(.tint)
+                        Text("Torly").font(.system(.largeTitle, design: .rounded, weight: .bold)).foregroundStyle(.tint)
                         Text(L("Твой бизнес. Твоё время.")).foregroundStyle(TorlyTheme.muted)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 24)
@@ -218,7 +309,7 @@ struct ContentView: View {
                         }
                     }
                 }
-            }.navigationTitle(L("Клиенты"))
+            }.navigationTitle(L("Клиенты")).navigationBarTitleDisplayMode(.inline)
                 .searchable(text: $search, prompt: L("Имя или телефон"))
                 .refreshable { await store.perform { try await store.loadClients() } }
         }
@@ -255,7 +346,7 @@ struct ContentView: View {
                         }
                     }
                 }
-            }.navigationTitle(L("Услуги"))
+            }.navigationTitle(L("Услуги")).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { showService = true } label: { Image(systemName: "plus") }.accessibilityLabel(L("Добавить услугу"))
@@ -298,7 +389,7 @@ struct ContentView: View {
                     Button(L("Выйти из аккаунта"), role: .destructive) { Task { await store.signOut() } }
                         .disabled(store.busy)
                 }
-            }.navigationTitle(L("Мой бизнес"))
+            }.navigationTitle(L("Мой бизнес")).navigationBarTitleDisplayMode(.inline)
         }
     }
 

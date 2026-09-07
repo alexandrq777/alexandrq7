@@ -54,9 +54,22 @@ include four languages, notification authorization and a local test, notificatio
 sound and haptic preferences, an app-switcher privacy cover, data visibility
 information, refresh, sign-out confirmation and version information.
 
-While the app is active and its SSE connection is live, a new public booking emits
-a private-data-free local notification (with permission). This works for any booking
-date, not just the visible calendar day. Reconnects do not replay alerts. Background
+New public bookings also create a durable, owner-scoped inbox entry. The native bell
+shows unread entries; opening one selects its business and booking day. SSE triggers
+an inbox refresh, with a 15-second foreground polling fallback. On reopen the app
+fetches missed alerts, with per-device deduplication of local notification attempts.
+The in-app banner does not require iOS notification permission. Inbox entries are
+marked read explicitly, not when a delivery attempt is made. Legacy bookings created
+before migration 002 are not backfilled because their public/manual origin is unknown.
+This works for any booking date, not just the visible calendar day. Background
 APNs delivery is NOT implemented: an APNs key/capability, device registration and a
 server delivery worker are still required. The notification test proves only local
 iPhone permission, not remote push delivery. iOS Focus and sound settings still apply.
+
+Settings use native switches; server addresses are not exposed in settings. Tap and
+scroll haptics default to enabled and are independently configurable. Non-cancelling,
+simultaneous window gestures preserve native control and scroll handling; scroll
+feedback is distance/time throttled and only active over scroll views during a drag.
+The two-second cold-start animation honors Reduce Motion. The compact variant is
+shown during owner data operations without a forced delay. Tab titles are inline
+under the compact rounded Torly wordmark, avoiding double large-title spacing.
