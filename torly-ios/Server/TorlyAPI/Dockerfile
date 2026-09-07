@@ -10,6 +10,7 @@ WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --chown=node:node package.json *.js ./
 COPY --chown=node:node schema ./schema
+COPY --chown=node:node public ./public
 USER node
 EXPOSE 3100
 CMD ["node", "server.js"]

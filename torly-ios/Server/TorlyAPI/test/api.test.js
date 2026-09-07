@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { once, EventEmitter } from 'node:events';
 import pgDriver from 'pg';
+import { DateTime } from 'luxon';
 import { migrate } from '../migrate.js';
 import { provision } from '../provision.js';
 import { createAPI } from '../api.js';
@@ -23,7 +24,9 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
   let pool;
   if (realPostgres) {
     const url = new URL(process.env.DATABASE_URL);
-    url.pathname = '/torly_verify';
+    const database=process.env.TORLY_VERIFY_DB || 'torly_verify';
+    assert.match(database,/^torly_verify(?:_[a-z0-9]+)*$/);
+    url.pathname = '/'+database;
     pool = new pgDriver.Pool({ connectionString: url.toString() });
   } else {
     pool = { query, connect: async () => Object.assign(new EventEmitter(), { query, release() {} }) };
@@ -65,6 +68,7 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
     assert.equal(fresh.services.length,0);
     assert.equal(fresh.staff.length,1);
     assert.equal(fresh.published,false);
+    assert.equal((await request('/v1/businesses/'+fresh.id+'/publishing','PUT',{published:true},freshToken)).status,409);
     assert.deepEqual((await request('/v1/clients?businessId='+fresh.id,'GET',null,freshToken)).body.clients,[]);
     const freshServiceInput = {businessId:fresh.id,name:'New service',priceMinor:12550,minutes:30,requestKey:randomUUID()};
     assert.equal((await request('/v1/services','POST',freshServiceInput,token2)).status,404);
@@ -93,6 +97,53 @@ test('owner API persists changes, isolates tenants and rejects overlaps', async 
     assert.equal((await request('/v1/clients?businessId='+fresh.id,'GET',null,freshToken)).body.clients[0].note,'Preference');
     assert.equal((await request('/v1/businesses/'+fresh.id,'PUT',{...businessInput,currency:'USD'},freshToken)).status,409);
     assert.equal((await request('/v1/businesses/'+fresh.id,'PUT',{...businessInput,name:'Updated'},freshToken)).status,200);
+    const publishPath='/v1/businesses/'+fresh.id+'/publishing';
+    assert.equal((await request(publishPath,'PUT',{published:true})).status,401);
+    assert.equal((await request(publishPath,'PUT',{published:true},token2)).status,404);
+    assert.equal((await request(publishPath,'PUT',{published:true},freshToken)).status,200);
+    const publicPath='/v1/public/'+fresh.slug;
+    const publicProfile=(await request(publicPath)).body;
+    assert.equal(publicProfile.business.owner_id,undefined);
+    assert.equal(publicProfile.clients,undefined);
+    assert.equal(publicProfile.staff.length,2);
+    const now=DateTime.now().setZone('Asia/Jerusalem');
+    const sunday=now.plus({days:7-now.weekday+7}).toISODate();
+    const availablePath=publicPath+'/availability?'+new URLSearchParams({staffId:fresh.staff[0].id,serviceId:freshService.body.service.id,date:sunday});
+    const publicSlots=(await request(availablePath)).body.slots;
+    assert(publicSlots.length>0);
+    const publicInput={...freshBooking,businessId:randomUUID(),startsAt:publicSlots[0],requestKey:randomUUID()};
+    const publicBooking=await request(publicPath+'/bookings','POST',publicInput);
+    assert.equal(publicBooking.status,201,JSON.stringify(publicBooking.body));
+    assert.deepEqual(Object.keys(publicBooking.body.booking).sort(),['ends_at','id','service_name','starts_at','status']);
+    assert.equal((await request(publicPath+'/bookings','POST',publicInput)).body.booking.id,publicBooking.body.booking.id);
+    assert.equal((await request(publicPath+'/bookings','POST',{...publicInput,requestKey:randomUUID()})).status,409);
+    assert(!(await request(availablePath)).body.slots.includes(publicSlots[0]));
+    assert.equal((await request(publicPath+'/bookings','POST',{...publicInput,staffId:randomUUID(),requestKey:randomUUID()})).status,404);
+    if (realPostgres) {
+      const controller=new AbortController();
+      const response=await fetch(base+'/v1/events',{headers:{Authorization:'Bearer '+freshToken},signal:controller.signal});
+      const reader=response.body.getReader();
+      await reader.read();
+      let timeout;
+      try {
+        const results=await Promise.all([1,2].map(()=>request(publicPath+'/bookings','POST',{...publicInput,startsAt:publicSlots[2],requestKey:randomUUID()})));
+        assert.deepEqual(results.map(r=>r.status).sort(),[201,409]);
+        const event=await Promise.race([reader.read(),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Public booking SSE timeout')),5000);})]);
+        assert(new TextDecoder().decode(event.value).includes('event: calendar'));
+      } finally {clearTimeout(timeout);controller.abort();}
+    }
+    assert.equal((await request(publicPath+'/availability?'+new URLSearchParams({staffId:fresh.staff[0].id,serviceId:freshService.body.service.id,date:'2099-01-01'}))).status,400);
+    const ownerEntries=(await request('/v1/bookings?'+new URLSearchParams({businessId:fresh.id,from:now.toUTC().toISO(),to:now.plus({days:21}).toUTC().toISO()}),'GET',null,freshToken)).body.bookings;
+    assert(ownerEntries.some(e=>e.id===publicBooking.body.booking.id));
+    const html=await fetch(base+'/book/'+fresh.slug);
+    assert.equal(html.status,200);
+    assert(html.headers.get('content-security-policy').includes("frame-ancestors 'none'"));
+    assert((await html.text()).includes('booking-form'));
+    assert.equal((await fetch(base+'/booking.js')).status,200);
+    assert.equal((await request(publishPath,'PUT',{published:false},freshToken)).status,200);
+    assert.equal((await request(publicPath)).status,404);
+    assert.equal((await request(availablePath)).status,404);
+    assert.equal((await request(publicPath+'/bookings','POST',publicInput)).status,404);
     assert.equal((await request('/v1/services/'+freshService.body.service.id,'DELETE',null,freshToken)).status,200);
     assert.equal((await request('/v1/bookings','POST',{...freshBooking,startsAt:'2030-01-06T12:00:00+02:00',requestKey:randomUUID()},freshToken)).status,400);
     const business = (await request('/v1/owner','GET',null,token)).body.businesses[0];

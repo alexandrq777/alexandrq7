@@ -1,4 +1,4 @@
-# Torly API 0.3
+# Torly API 0.4
 
 Node.js 22 + PostgreSQL 17 + Caddy. Native iPhone client in `../../TorBooking`.
 Replaces the earlier in-memory demonstration API. No legacy `/api/*` endpoint
@@ -27,6 +27,12 @@ JSON uses snake_case in database responses and camelCase in mutation inputs.
 - `DELETE /v1/session`: revoke the current session.
 - `GET /v1/categories`: extensible business categories, Hebrew/English.
 - `GET /v1/public/:slug`: published business profile, no private client fields.
+- `GET /book/:slug`: responsive client page; no owner app installation required.
+- `GET /v1/public/:slug/availability?staffId=UUID&serviceId=UUID&date=YYYY-MM-DD`.
+- `POST /v1/public/:slug/bookings`: serviceId, staffId, startsAt, clientName,
+  clientPhone, requestKey; business is resolved from the published slug.
+- `PUT /v1/businesses/:id/publishing`: owner-only {published}; requires an
+  active service and configured working hours to publish.
 - `GET /v1/owner`: owned businesses, services, staff, working hours.
 - `POST /v1/businesses`: contact/region/category fields, staffName, hours and requestKey.
   Creates an unpublished business with one staff member and no services or client data.
@@ -58,14 +64,19 @@ Follow `DEPLOY.md` and `../../Docs/server-architecture.md`. Accounts are created
 through the native registration form. `provision.js` is an optional operator/test
 tool, not a startup seed. Never run test fixtures against the primary database.
 
-The prototype supports self-service owners. Email verification/recovery, public
-booking writes, provider logins, payments, WhatsApp/APNs delivery, waitlist,
+The prototype supports self-service owners and public booking requests.
+Email verification/recovery, provider logins, payments, WhatsApp/APNs delivery, waitlist,
 reviews and forms are not yet connected. Notification jobs are explicitly disabled.
 The plan metadata is ILS 39/month; subscription collection is not active.
 
 Auth throttling is process-local. Compose isolates the API from direct internet
 access and Caddy overwrites X-Real-IP; TRUST_PROXY must only be enabled behind
 that trusted proxy. Multi-instance deployment needs shared throttling.
+
+Optional browser QA: `node test/browser-check.js` with Playwright available.
+PLAYWRIGHT_MODULE may point to its module, and BROWSER_CHANNEL=chrome uses local
+Chrome. Fixtures exist only in memory. Public phone numbers are not OTP-verified;
+add production bot protection/verification before a broad commercial launch.
 
 `nginx-torly-api.conf` and `torly-api.service` belong to the old in-memory starter.
 Use Compose/Caddy for this version; do not install both configurations.

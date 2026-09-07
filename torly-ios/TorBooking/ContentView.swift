@@ -105,6 +105,7 @@ struct ContentView: View {
     private var calendar: some View {
         NavigationStack {
             List {
+                onlineBooking
                 Section {
                     DatePicker("Дата", selection: $store.day, displayedComponents: .date)
                         .datePickerStyle(.graphical)
@@ -247,6 +248,7 @@ struct ContentView: View {
     private var business: some View {
         NavigationStack {
             List {
+                onlineBooking
                 if store.businesses.count > 1 {
                     Picker("Бизнес", selection: $store.selectedBusinessId) {
                         ForEach(store.businesses) { Text($0.name).tag($0.id) }
@@ -282,6 +284,37 @@ struct ContentView: View {
 
     private func money(_ minor: Int) -> String {
         (Double(minor) / 100).formatted(.currency(code: store.business?.currency ?? "ILS"))
+    }
+
+    @ViewBuilder private var onlineBooking: some View {
+        if let business = store.business,
+           let url = URL(string: store.serverAddress + "/book/" + business.slug) {
+            Section("Онлайн-запись") {
+                Toggle("Принимать записи по ссылке", isOn: Binding(
+                    get: { store.business?.published ?? false },
+                    set: { published in
+                        Task {
+                            await store.perform {
+                                _ = try await store.request("/v1/businesses/\(business.id)/publishing",
+                                    method: "PUT", body: ["published": published])
+                                try await store.reload()
+                            }
+                        }
+                    }
+                )).disabled(store.busy)
+                if business.published {
+                    ShareLink(item: url) {
+                        Label("Поделиться с клиентом", systemImage: "square.and.arrow.up")
+                    }
+                    Link(destination: url) { Label("Открыть страницу записи", systemImage: "safari") }
+                    Text(url.absoluteString).font(.caption).foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                } else {
+                    Text("Добавь услуги и рабочие часы, затем включи онлайн-запись.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 }
 

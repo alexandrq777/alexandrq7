@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Torly | Booking</title>
+<link rel="icon" href="/torly-icon.png">
+<link rel="stylesheet" href="/booking.css">
+<script src="/booking.js" defer></script>
+</head>
+<body>
+<header><a class="brand" href="#"><img src="/torly-icon.png" alt="" width="36" height="36">Torly</a><select id="language" aria-label="Language"><option value="en">English</option><option value="he">עברית</option><option value="ru">Русский</option></select></header>
+<main>
+<p id="status" role="status" aria-live="polite">Loading...</p>
+<button id="retry" type="button" hidden>Retry</button>
+<div id="profile" hidden>
+<section class="identity"><h1 id="business-name"></h1><p id="address"></p><nav class="contacts"><a id="call"></a><a id="whatsapp" target="_blank" rel="noopener"></a><a id="waze" target="_blank" rel="noopener">Waze</a></nav></section>
+<form id="booking-form">
+<section class="choices"><h2 data-i18n="serviceTitle"></h2><label for="service" data-i18n="service"></label><select id="service" required></select><label for="staff" data-i18n="staff"></label><select id="staff" required></select></section>
+<section><h2 data-i18n="when"></h2><p id="timezone" class="muted"></p><div class="month-heading"><button id="previous" type="button" aria-label="Previous month">&#8592;</button><h3 id="month-title"></h3><button id="next" type="button" aria-label="Next month">&#8594;</button></div><div id="weekdays" class="calendar weekdays"></div><div id="days" class="calendar"></div><h3 id="selected-date"></h3><p id="slot-status" role="status"></p><div id="slots" class="slots"></div></section>
+<section><h2 data-i18n="details"></h2><label for="client-name" data-i18n="name"></label><input id="client-name" autocomplete="name" maxlength="200" required><label for="phone" data-i18n="phone"></label><input id="phone" type="tel" autocomplete="tel" dir="ltr" pattern="\+[1-9][0-9]{7,14}" placeholder="+972..." required><label class="consent"><input id="consent" type="checkbox" required><span data-i18n="consent"></span></label><p id="summary"></p><p id="error" role="alert"></p><button id="submit" class="primary" type="submit" disabled data-i18n="submit"></button></section>
+</form>
+<section id="success" hidden><h2 data-i18n="success"></h2><p id="receipt"></p><p data-i18n="pending"></p><p data-i18n="changes"></p><a id="contact-again"></a></section>
+</div>
+</main>
+<footer>Torly</footer>
+</body>
+</html>

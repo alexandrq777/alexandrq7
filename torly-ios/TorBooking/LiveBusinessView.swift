@@ -31,6 +31,8 @@ struct RemoteBusiness: Decodable, Identifiable {
     let categoryId: String
     let country: String
     let locale: String
+    let slug: String
+    let published: Bool
     let services: [RemoteService]
     let staff: [RemoteStaff]
     let hours: [RemoteHours]

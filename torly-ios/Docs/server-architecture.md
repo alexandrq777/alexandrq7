@@ -37,6 +37,10 @@ This is a single-host deployment, not a highly available cluster.
 - SwiftUI-only live owner flow: empty registration, business setup, calendar,
   clients, service/staff creation, individual hours, breaks/leave and rescheduling.
   Demo screens and bundled demo models have been removed. Day totals use real entries.
+- Native publication toggle and sharing. Same-host public client page uses only
+  allowlisted published business data, active services and free slots. Public and
+  owner bookings share one transactional booking implementation and overlap constraint.
+  Public submissions cannot overwrite an existing client's name.
 - Notification outbox schema with due date, delivery status and micro-USD cost.
   Jobs stay `disabled`: no messages or fictional delivery confirmations are sent.
 - Docker Compose, Caddy HTTPS config and a PostgreSQL backup command with a daily systemd timer.
@@ -46,7 +50,7 @@ The main plan is 3900 ILS minor units per month. Billing is not enabled.
 ## Not yet connected
 
 - Email verification, Apple/Google login and password recovery.
-- Client authentication, public booking mutations, business publishing controls,
+- Client authentication and self-service cancellation/rescheduling,
   profile photo storage and onboarding photo upload.
 - WhatsApp templates, consent, credentials, provider webhooks, quota reservations,
   retry worker, waitlist notifications, push/APNs and calendar integrations.
@@ -90,6 +94,15 @@ PostgreSQL database and additionally checks simultaneous requests and SSE delive
 - Daily backup timer active at 03:00 UTC. Initial backup restored into a separate database.
 - Signed physical iPhone build and simulator build succeeded.
 
-The hostname currently serves the API, not a finished public booking website.
-The public business starts unpublished. Owner login details are in a separate
+The hostname serves the API and public booking pages at /book/:slug.
+Businesses start unpublished; the owner explicitly enables sharing. Owner login details are in a separate
 local private file, never embedded in the app or committed to GitHub.
+
+## Public Booking Limits
+
+Public booking requests require no owner account; they start pending, not confirmed.
+Phone ownership is not verified. The current IP/phone throttling is a prototype
+abuse limit, not a replacement for OTP or production bot protection.
+Public availability is limited to the next 180 days. Prices/duration are always
+read from the database. Tests cover unpublished/private access, duplicates,
+simultaneous public bookings and notifications to the owner's event stream.

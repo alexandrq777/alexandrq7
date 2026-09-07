@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { isIP } from 'node:net';
 import { DateTime } from 'luxon';
@@ -38,6 +39,49 @@ async function staffFor(db, accountId, staffId) {
 const bookingColumns = `e.*, c.name AS client_name, c.phone AS client_phone, s.name AS staff_name`;
 const bookingJoins = `calendar_entries e LEFT JOIN clients c ON c.id=e.client_id JOIN staff s ON s.id=e.staff_id`;
 
+async function availability(pool,business,staffId,serviceId,requestedDate,isPublic=false) {
+        const staff = (await pool.query('SELECT id FROM staff WHERE id=$1 AND business_id=$2', [staffId, business.id])).rows[0];
+        const service = (await pool.query('SELECT * FROM services WHERE id=$1 AND business_id=$2 AND active=true', [serviceId, business.id])).rows[0];
+        if (!staff || !service) throw new APIError(404, 'Staff or active service not found');
+        const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(requestedDate);
+        const day = DateTime.fromISO(date, { zone: business.timezone });
+        if (isPublic && (day < DateTime.now().setZone(business.timezone).startOf('day') || day > DateTime.now().setZone(business.timezone).plus({days:180}).startOf('day'))) throw new APIError(400,'Choose a date within 180 days');
+        if (!day.isValid) throw new APIError(400, 'Invalid date');
+        const hours = (await pool.query('SELECT * FROM working_hours WHERE staff_id=$1', [staffId])).rows;
+        const entries = (await pool.query("SELECT starts_at,ends_at FROM calendar_entries WHERE staff_id=$1 AND status<>'cancelled' AND starts_at<$3 AND ends_at>$2", [staffId, day.toISO(), day.plus({ days: 1 }).toISO()])).rows;
+        return availableSlots(date, business.timezone, service.minutes, hours, entries);
+}
+
+async function createBooking(pool, accountId, input, isPublic = false) {
+        return await transaction(pool, async db => {
+          const business = isPublic
+            ? (await db.query('SELECT * FROM businesses WHERE id=$1 AND published=true FOR SHARE',[input.businessId])).rows[0]
+            : await owned(db, accountId, input.businessId);
+          if (!business) throw new APIError(404,'Business not found');
+          const staff = (await db.query('SELECT * FROM staff WHERE id=$1 AND business_id=$2 FOR UPDATE',[input.staffId,business.id])).rows[0];
+          if (!staff) throw new APIError(404,'Staff not found');
+          if (isPublic && DateTime.fromISO(input.startsAt).setZone(business.timezone).startOf('day') > DateTime.now().setZone(business.timezone).plus({days:180}).startOf('day')) throw new APIError(400,'Choose a date within 180 days');
+          if (staff.business_id !== business.id) throw new APIError(400, 'Staff belongs to another business');
+          const hash = digest((isPublic ? 'public:' : '') + JSON.stringify(input));
+          const previous = (await db.query('SELECT * FROM calendar_entries WHERE request_key=$1', [input.requestKey])).rows[0];
+          if (previous) {
+            if (previous.business_id !== business.id || previous.request_hash !== hash) throw new APIError(409, 'Request key already used');
+            return previous;
+          }
+          const service = (await db.query('SELECT * FROM services WHERE id=$1 AND business_id=$2 AND active=true', [input.serviceId, business.id])).rows[0];
+          if (!service) throw new APIError(400, 'Configure service price and duration first');
+          const hours = (await db.query('SELECT * FROM working_hours WHERE staff_id=$1', [staff.id])).rows;
+          if (new Date(input.startsAt) <= new Date() || !fitsHours(input.startsAt, service.minutes, business.timezone, hours)) throw new APIError(409, 'Appointment is outside working hours or in the past');
+          const client = (await db.query('INSERT INTO clients(business_id,name,phone) VALUES($1,$2,$3) ON CONFLICT(business_id,phone) DO UPDATE SET name=CASE WHEN $4 THEN clients.name ELSE excluded.name END RETURNING id', [business.id, input.clientName, input.clientPhone, isPublic])).rows[0];
+          const end = DateTime.fromISO(input.startsAt).plus({ minutes: service.minutes }).toUTC().toISO();
+          const entry = (await db.query("INSERT INTO calendar_entries(business_id,staff_id,service_id,client_id,kind,starts_at,ends_at,service_name,price_minor,currency,request_key,request_hash) VALUES($1,$2,$3,$4,'booking',$5,$6,$7,$8,$9,$10,$11) RETURNING *", [business.id, staff.id, service.id, client.id, input.startsAt, end, service.name, service.price_minor, business.currency, input.requestKey, hash])).rows[0];
+          await db.query("INSERT INTO notification_jobs(booking_id,channel,run_at) VALUES($1,'whatsapp',$2)", [entry.id, DateTime.fromISO(input.startsAt).minus({ hours: 2 }).toUTC().toISO()]);
+          await db.query("SELECT pg_notify('torly_calendar',$1)", [business.id]);
+          return entry;
+        });
+
+}
+
 export async function createAPI(pool) {
   const dummyHash = await hashPassword(randomBytes(32).toString('hex'));
   const attempts = new Map();
@@ -70,7 +114,7 @@ export async function createAPI(pool) {
       const remoteIP = process.env.TRUST_PROXY === '1' && typeof forwardedIP === 'string' && isIP(forwardedIP) ? forwardedIP : req.socket.remoteAddress;
       if (req.method === 'GET' && path === '/health') {
         await pool.query('SELECT 1');
-        return send(res, 200, { ok: true, service: 'torly-api', version: '0.3.0' });
+        return send(res, 200, { ok: true, service: 'torly-api', version: '0.4.0' });
       }
       if (req.method === 'POST' && path === '/v1/accounts') {
         throttle(`register:${remoteIP}`,10);
@@ -98,11 +142,42 @@ export async function createAPI(pool) {
         return send(res, 201, { token });
       }
       if (req.method === 'GET' && path === '/v1/categories') return send(res, 200, { categories: (await pool.query('SELECT * FROM categories ORDER BY id')).rows });
-      const publicMatch = path.match(/^\/v1\/public\/([a-z0-9-]+)$/);
-      if (req.method === 'GET' && publicMatch) {
+      if (req.method === 'GET' && /^\/book\/[a-z0-9-]+$/.test(path)) {
+        res.writeHead(200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store',
+          'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+          'Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'});
+        return res.end(await readFile(new URL('./public/booking.html',import.meta.url)));
+      }
+      const assets = {'/booking.js':['booking.js','text/javascript'],'/booking.css':['booking.css','text/css'],'/torly-icon.png':['torly-icon.png','image/png']};
+      if (req.method === 'GET' && assets[path]) {
+        const [file,type] = assets[path];
+        res.writeHead(200,{'Content-Type':type,'Cache-Control':'no-cache','X-Content-Type-Options':'nosniff'});
+        return res.end(await readFile(new URL('./public/'+file,import.meta.url)));
+      }
+      const publicMatch = path.match(/^\/v1\/public\/([a-z0-9-]+)(?:\/(availability|bookings))?$/);
+      if (publicMatch) {
+        throttle('public:'+remoteIP,300);
         const business = (await pool.query('SELECT id,slug,name,address,phone,timezone,currency,locale,category_id FROM businesses WHERE slug=$1 AND published=true', [publicMatch[1]])).rows[0];
         if (!business) throw new APIError(404, 'Business not found');
-        return send(res, 200, { business, services: (await pool.query('SELECT id,name,price_minor,minutes FROM services WHERE business_id=$1 AND active=true', [business.id])).rows });
+        if (req.method === 'GET' && !publicMatch[2]) {
+          return send(res,200,{business,
+            services:(await pool.query('SELECT id,name,price_minor,minutes FROM services WHERE business_id=$1 AND active=true ORDER BY name',[business.id])).rows,
+            staff:(await pool.query('SELECT id,name FROM staff WHERE business_id=$1 ORDER BY name',[business.id])).rows});
+        }
+        if (req.method === 'GET' && publicMatch[2]==='availability') {
+          const staffId=uuid.parse(url.searchParams.get('staffId'));
+          const serviceId=uuid.parse(url.searchParams.get('serviceId'));
+          return send(res,200,{slots:await availability(pool,business,staffId,serviceId,url.searchParams.get('date'),true)});
+        }
+        if (req.method === 'POST' && publicMatch[2]==='bookings') {
+          throttle('public-write:'+remoteIP,10);
+          const input=bookingInput.parse({...await body(req),businessId:business.id});
+          throttle('public-phone:'+digest(input.clientPhone),10);
+          const entry=await createBooking(pool,null,input,true);
+          // Public callers receive only this submission, never client records or owner credentials.
+          return send(res,201,{booking:{id:entry.id,starts_at:entry.starts_at,ends_at:entry.ends_at,status:entry.status,service_name:entry.service_name}});
+        }
+        throw new APIError(404,'Not found');
       }
 
       const token = req.headers.authorization?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];
@@ -126,6 +201,21 @@ export async function createAPI(pool) {
         // Membership changed: reconnect so stream scopes include the new business.
         for (const stream of subscribers) if (stream.tokenHash===digest(token)) stream.res.end();
         return send(res,201,{business:result});
+      }
+      const publishMatch=path.match(/^\/v1\/businesses\/([\w-]+)\/publishing$/);
+      if (req.method==='PUT' && publishMatch) {
+        const {published}=z.object({published:z.boolean()}).parse(await body(req));
+        await transaction(pool,async db=>{
+          const business=await owned(db,accountId,publishMatch[1]);
+          if (published) {
+            const services=await db.query('SELECT id FROM services WHERE business_id=$1 AND active=true LIMIT 1',[business.id]);
+            const hours=await db.query('SELECT h.staff_id FROM working_hours h JOIN staff s ON s.id=h.staff_id WHERE s.business_id=$1 LIMIT 1',[business.id]);
+            if (!services.rowCount || !hours.rowCount) throw new APIError(409,'Add an active service and working hours before publishing');
+          }
+          await db.query('UPDATE businesses SET published=$2 WHERE id=$1',[business.id,published]);
+          await db.query("SELECT pg_notify('torly_calendar',$1)",[business.id]);
+        });
+        return send(res,200,{ok:true});
       }
       const businessMatch = path.match(/^\/v1\/businesses\/([\w-]+)$/);
       if (req.method === 'PUT' && businessMatch) {
@@ -233,40 +323,11 @@ export async function createAPI(pool) {
         const business = await owned(pool, accountId, url.searchParams.get('businessId'));
         const staffId = uuid.parse(url.searchParams.get('staffId'));
         const serviceId = uuid.parse(url.searchParams.get('serviceId'));
-        const staff = (await pool.query('SELECT id FROM staff WHERE id=$1 AND business_id=$2', [staffId, business.id])).rows[0];
-        const service = (await pool.query('SELECT * FROM services WHERE id=$1 AND business_id=$2 AND active=true', [serviceId, business.id])).rows[0];
-        if (!staff || !service) throw new APIError(404, 'Staff or active service not found');
-        const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(url.searchParams.get('date'));
-        const day = DateTime.fromISO(date, { zone: business.timezone });
-        if (!day.isValid) throw new APIError(400, 'Invalid date');
-        const hours = (await pool.query('SELECT * FROM working_hours WHERE staff_id=$1', [staffId])).rows;
-        const entries = (await pool.query("SELECT starts_at,ends_at FROM calendar_entries WHERE staff_id=$1 AND status<>'cancelled' AND starts_at<$3 AND ends_at>$2", [staffId, day.toISO(), day.plus({ days: 1 }).toISO()])).rows;
-        return send(res, 200, { slots: availableSlots(date, business.timezone, service.minutes, hours, entries) });
+        return send(res,200,{slots:await availability(pool,business,staffId,serviceId,url.searchParams.get('date'))});
       }
       if (req.method === 'POST' && path === '/v1/bookings') {
         const input = bookingInput.parse(await body(req));
-        const result = await transaction(pool, async db => {
-          const business = await owned(db, accountId, input.businessId);
-          const staff = await staffFor(db, accountId, input.staffId);
-          if (staff.business_id !== business.id) throw new APIError(400, 'Staff belongs to another business');
-          const hash = digest(JSON.stringify(input));
-          const previous = (await db.query('SELECT * FROM calendar_entries WHERE request_key=$1', [input.requestKey])).rows[0];
-          if (previous) {
-            if (previous.business_id !== business.id || previous.request_hash !== hash) throw new APIError(409, 'Request key already used');
-            return previous;
-          }
-          const service = (await db.query('SELECT * FROM services WHERE id=$1 AND business_id=$2 AND active=true', [input.serviceId, business.id])).rows[0];
-          if (!service) throw new APIError(400, 'Configure service price and duration first');
-          const hours = (await db.query('SELECT * FROM working_hours WHERE staff_id=$1', [staff.id])).rows;
-          if (new Date(input.startsAt) <= new Date() || !fitsHours(input.startsAt, service.minutes, business.timezone, hours)) throw new APIError(409, 'Appointment is outside working hours or in the past');
-          const client = (await db.query('INSERT INTO clients(business_id,name,phone) VALUES($1,$2,$3) ON CONFLICT(business_id,phone) DO UPDATE SET name=excluded.name RETURNING id', [business.id, input.clientName, input.clientPhone])).rows[0];
-          const end = DateTime.fromISO(input.startsAt).plus({ minutes: service.minutes }).toUTC().toISO();
-          const entry = (await db.query("INSERT INTO calendar_entries(business_id,staff_id,service_id,client_id,kind,starts_at,ends_at,service_name,price_minor,currency,request_key,request_hash) VALUES($1,$2,$3,$4,'booking',$5,$6,$7,$8,$9,$10,$11) RETURNING *", [business.id, staff.id, service.id, client.id, input.startsAt, end, service.name, service.price_minor, business.currency, input.requestKey, hash])).rows[0];
-          await db.query("INSERT INTO notification_jobs(booking_id,channel,run_at) VALUES($1,'whatsapp',$2)", [entry.id, DateTime.fromISO(input.startsAt).minus({ hours: 2 }).toUTC().toISO()]);
-          await db.query("SELECT pg_notify('torly_calendar',$1)", [business.id]);
-          return entry;
-        });
-        return send(res, 201, { booking: result });
+        return send(res,201,{booking:await createBooking(pool,accountId,input)});
       }
       const bookingMatch = path.match(/^\/v1\/bookings\/([\w-]+)$/);
       if (req.method === 'PATCH' && bookingMatch) {
