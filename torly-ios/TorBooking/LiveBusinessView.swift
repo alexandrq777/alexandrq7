@@ -342,11 +342,11 @@ struct LiveServiceForm: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            TorlyForm {
                 TextField("Название", text: $name)
                 TextField("Цена (\(store.business?.currency ?? "ILS"))", text: $price).keyboardType(.decimalPad)
                 Stepper("\(minutes) мин", value: $minutes, in: 5...480, step: 5)
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }
             .navigationTitle("Услуга")
             .toolbar {
@@ -390,7 +390,7 @@ struct LiveBookingForm: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            TorlyForm {
                 Picker("Услуга", selection: $serviceId) {
                     Text("Выбрать").tag("")
                     ForEach(store.business?.services.filter(\.active) ?? []) { Text($0.name).tag($0.id) }
@@ -404,10 +404,10 @@ struct LiveBookingForm: View {
                     Text("Выбрать").tag("")
                     ForEach(slots, id: \.self) { Text(store.time($0)).tag($0) }
                 }
-                if !loading && slots.isEmpty { Text("Нет свободного времени").foregroundStyle(.secondary) }
+                if !loading && slots.isEmpty { Text("Нет свободного времени").foregroundStyle(TorlyTheme.muted) }
                 TextField("Имя клиента", text: $name)
                 TextField("Телефон", text: $phone).keyboardType(.phonePad)
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }
             .disabled(saving)
             .navigationTitle("Новая запись")
@@ -458,7 +458,7 @@ struct LiveHoursForm: View {
     private let weekdays = ["Воскресенье","Понедельник","Вторник","Среда","Четверг","Пятница","Суббота"]
 
     var body: some View {
-        Form {
+        TorlyForm {
             ForEach(0..<7) { day in
                 Section {
                     Toggle(weekdays[day], isOn: $open[day])

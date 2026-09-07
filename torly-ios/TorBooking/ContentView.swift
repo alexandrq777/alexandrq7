@@ -46,7 +46,8 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .tint(Color(red: 0.35, green: 0.66, blue: 1))
+        .tint(TorlyTheme.accent)
+        .background(TorlyTheme.background.ignoresSafeArea())
         .alert("Torly", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button("OK") { store.error = nil }
         } message: { Text(store.error ?? "") }
@@ -62,7 +63,7 @@ struct ContentView: View {
 
     private var login: some View {
         NavigationStack {
-            Form {
+            TorlyForm {
                 Section {
                     VStack(spacing: 12) {
                         if let path = Bundle.main.path(forResource: "Torly-AppIcon-1024", ofType: "png"),
@@ -70,7 +71,7 @@ struct ContentView: View {
                             Image(uiImage: icon).resizable().frame(width: 76, height: 76).clipShape(RoundedRectangle(cornerRadius: 18))
                         }
                         Text("Torly").font(.largeTitle.bold()).foregroundStyle(.tint)
-                        Text("Твой бизнес. Твоё время.").foregroundStyle(.secondary)
+                        Text("Твой бизнес. Твоё время.").foregroundStyle(TorlyTheme.muted)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 24)
                     .listRowBackground(Color.clear)
@@ -80,10 +81,11 @@ struct ContentView: View {
                         Text("Войти").tag(false)
                         Text("Регистрация").tag(true)
                     }.pickerStyle(.segmented)
-                    TextField("Email", text: $email)
+                    TextField("Email", text: $email, prompt: Text("Email").foregroundColor(TorlyTheme.muted))
                         .keyboardType(.emailAddress).textContentType(.username)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    SecureField(registering ? "Пароль, минимум 12 символов" : "Пароль", text: $password)
+                    SecureField(registering ? "Пароль, минимум 12 символов" : "Пароль", text: $password,
+                                prompt: Text(registering ? "Пароль, минимум 12 символов" : "Пароль").foregroundColor(TorlyTheme.muted))
                         .textContentType(registering ? .newPassword : .password)
                     Button {
                         Task {
@@ -96,15 +98,17 @@ struct ContentView: View {
                             Spacer()
                             if store.busy { ProgressView() } else { Image(systemName: "arrow.right") }
                         }
-                    }.disabled(store.busy || email.isEmpty || password.count < (registering ? 12 : 1))
+                    }.buttonStyle(TorlyPrimaryButtonStyle())
+                    .disabled(store.busy || email.isEmpty || password.count < (registering ? 12 : 1))
                 }
             }.navigationBarTitleDisplayMode(.inline)
+                .toolbar(.hidden, for: .navigationBar)
         }
     }
 
     private var calendar: some View {
         NavigationStack {
-            List {
+            TorlyList {
                 onlineBooking
                 Section {
                     DatePicker("Дата", selection: $store.day, displayedComponents: .date)
@@ -135,7 +139,7 @@ struct ContentView: View {
                 Section {
                     Label(store.connected ? "Календарь синхронизирован" : "Переподключение…",
                           systemImage: store.connected ? "checkmark.icloud" : "icloud.slash")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(TorlyTheme.muted)
                 }
             }
             .navigationTitle(store.business?.name ?? "Календарь")
@@ -176,14 +180,17 @@ struct ContentView: View {
             }
             Text(booking.clientName ?? (booking.kind == "time_off" ? "Отпуск" : "Перерыв")).font(.headline)
             Text([booking.serviceName, booking.staffName].compactMap { $0 }.joined(separator: " · "))
-                .font(.subheadline).foregroundStyle(.secondary)
-            Text(booking.statusTitle).font(.caption).foregroundStyle(.secondary)
+                .font(.subheadline).foregroundStyle(TorlyTheme.muted)
+            HStack(spacing: 6) {
+                Circle().fill(TorlyTheme.statusColor(booking.status)).frame(width: 6, height: 6)
+                Text(booking.statusTitle).font(.caption.weight(.medium))
+            }.foregroundStyle(TorlyTheme.statusColor(booking.status))
         }.padding(.vertical, 5)
     }
 
     private var clients: some View {
         NavigationStack {
-            List {
+            TorlyList {
                 if store.clients.isEmpty { EmptyRow(title: "Клиентов пока нет", symbol: "person.2") }
                 ForEach(store.clients.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.phone.contains(search) }) { client in
                     NavigationLink {
@@ -191,9 +198,9 @@ struct ContentView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(client.name)
-                            Text(client.phone).font(.caption).foregroundStyle(.secondary)
+                            Text(client.phone).font(.caption).foregroundStyle(TorlyTheme.muted)
                             if client.noShowCount > 0 {
-                                Label("Неявки: \(client.noShowCount)", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.orange)
+                                Label("Неявки: \(client.noShowCount)", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(TorlyTheme.warning)
                             }
                         }
                     }
@@ -206,7 +213,7 @@ struct ContentView: View {
 
     private var services: some View {
         NavigationStack {
-            List {
+            TorlyList {
                 if store.business?.services.isEmpty ?? true {
                     EmptyRow(title: "Услуг пока нет", symbol: "scissors")
                     Button("Добавить услугу", systemImage: "plus") { showService = true }
@@ -216,7 +223,7 @@ struct ContentView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(service.name).foregroundStyle(.primary)
-                                Text(service.active ? "\(service.minutes ?? 0) мин" : "В архиве").font(.caption).foregroundStyle(.secondary)
+                                Text(service.active ? "\(service.minutes ?? 0) мин" : "В архиве").font(.caption).foregroundStyle(TorlyTheme.muted)
                             }
                             Spacer()
                             if let price = service.priceMinor { Text(money(price)) }
@@ -247,7 +254,7 @@ struct ContentView: View {
 
     private var business: some View {
         NavigationStack {
-            List {
+            TorlyList {
                 onlineBooking
                 if store.businesses.count > 1 {
                     Picker("Бизнес", selection: $store.selectedBusinessId) {
@@ -262,7 +269,7 @@ struct ContentView: View {
                         Text(business.name).font(.title2.bold()).foregroundStyle(.tint)
                         Label(business.address, systemImage: "mappin.and.ellipse")
                         Label(business.phone, systemImage: "phone")
-                        Text(business.timezone).font(.caption).foregroundStyle(.secondary)
+                        Text(business.timezone).font(.caption).foregroundStyle(TorlyTheme.muted)
                         NavigationLink("Данные бизнеса") { BusinessSetupForm(store: store, editing: true) }
                     }
                     Section("Команда и рабочие часы") {
@@ -305,13 +312,13 @@ struct ContentView: View {
                 if business.published {
                     ShareLink(item: url) {
                         Label("Поделиться с клиентом", systemImage: "square.and.arrow.up")
-                    }
+                    }.buttonStyle(TorlyPrimaryButtonStyle())
                     Link(destination: url) { Label("Открыть страницу записи", systemImage: "safari") }
-                    Text(url.absoluteString).font(.caption).foregroundStyle(.secondary)
+                    Text(url.absoluteString).font(.caption).foregroundStyle(TorlyTheme.muted)
                         .textSelection(.enabled)
                 } else {
                     Text("Добавь услуги и рабочие часы, затем включи онлайн-запись.")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(TorlyTheme.muted)
                 }
             }
         }
@@ -323,8 +330,12 @@ private struct EmptyRow: View {
     let symbol: String
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: symbol).font(.system(size: 30)).foregroundStyle(.tint)
-            Text(title).foregroundStyle(.secondary)
+            Image(systemName: symbol).font(.system(size: 26, weight: .light))
+                .foregroundStyle(TorlyTheme.accent)
+                .frame(width: 60, height: 60)
+                .background(TorlyTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(TorlyTheme.border, lineWidth: 1))
+            Text(title).foregroundStyle(TorlyTheme.muted)
         }.frame(maxWidth: .infinity).padding(.vertical, 26)
     }
 }
@@ -352,11 +363,11 @@ private struct BusinessSetupForm: View {
     private let titles = ["Данные бизнеса", "Категория", "Рабочие часы"]
 
     var body: some View {
-        Form {
+        TorlyForm {
             if !editing {
                 Section {
                     ProgressView(value: Double(step + 1), total: 3)
-                    Text("Шаг \(step + 1) из 3").font(.caption).foregroundStyle(.secondary)
+                    Text("Шаг \(step + 1) из 3").font(.caption).foregroundStyle(TorlyTheme.muted)
                 }
             }
             if editing || step == 0 {
@@ -397,7 +408,7 @@ private struct BusinessSetupForm: View {
             if !editing && step == 2 {
                 HoursFields(open: $open, starts: $starts, ends: $ends)
             }
-            if let error { Section { Text(error).foregroundStyle(.red) } }
+            if let error { Section { Text(error).foregroundStyle(TorlyTheme.danger) } }
             Section {
                 Button(editing ? "Сохранить" : step == 2 ? "Создать бизнес" : "Продолжить") {
                     if !editing && step < 2 { step += 1 }
@@ -499,10 +510,10 @@ private struct StaffCreationForm: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            TorlyForm {
                 TextField("Имя сотрудника", text: $name)
                 HoursFields(open: $open, starts: $starts, ends: $ends)
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }.disabled(saving)
                 .navigationTitle("Новый сотрудник")
                 .toolbar {
@@ -535,7 +546,7 @@ private struct ClientDetailForm: View {
     @State private var saving = false
 
     var body: some View {
-        Form {
+        TorlyForm {
             Section {
                 if let url = URL(string: "tel:\(client.phone)") { Link(client.phone, destination: url) }
                 LabeledContent("Завершённых визитов", value: "\(client.visits)")
@@ -571,7 +582,7 @@ private struct BlockForm: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            TorlyForm {
                 Picker("Тип", selection: $kind) {
                     Text("Перерыв").tag("break"); Text("Отпуск").tag("time_off")
                 }.pickerStyle(.segmented)
@@ -581,7 +592,7 @@ private struct BlockForm: View {
                 }
                 DatePicker("Начало", selection: $start)
                 DatePicker("Окончание", selection: $end, in: start...)
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }.environment(\.timeZone, store.businessCalendar.timeZone)
                 .disabled(saving)
                 .navigationTitle("Недоступное время")
@@ -617,10 +628,10 @@ private struct MoveBookingForm: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            TorlyForm {
                 Text(booking.clientName ?? "")
                 DatePicker("Новые дата и время", selection: $start, in: Date()...)
-                if let error { Text(error).foregroundStyle(.red) }
+                if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }.environment(\.timeZone, store.businessCalendar.timeZone)
                 .disabled(saving)
                 .navigationTitle("Перенести запись")
