@@ -44,41 +44,15 @@ struct ContentView: View {
                         }
                 }
             } else {
-                TabView(selection: $selectedTab) {
+                VStack(spacing: 0) {
+                    brandHeader
+                    TabView(selection: $selectedTab) {
                     calendar.tabItem { Label(L("Календарь"), systemImage: "calendar") }.tag(0)
                     clients.tabItem { Label(L("Клиенты"), systemImage: "person.2") }.tag(1)
                     services.tabItem { Label(L("Услуги"), systemImage: "scissors") }.tag(2)
                     business.tabItem { Label(L("Бизнес"), systemImage: "building.2") }.tag(3)
                     NavigationStack { AppSettings(store: store) }.tabItem { Label(L("Настройки"), systemImage: "gearshape") }.tag(4)
                 }
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    VStack(spacing: 8) {
-                        HStack {
-                            TorlyBrand()
-                            Spacer()
-                            if store.busy { TorlyLoading(compact: true) }
-                            Button { showAlerts = true } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "bell")
-                                    let unread = store.alerts.filter { $0.readAt == nil }.count
-                                    if unread > 0 { Text("\(unread)").font(.caption.bold()) }
-                                }.frame(minWidth: 44, minHeight: 44)
-                            }.accessibilityLabel(L("Уведомления"))
-                        }
-                        if store.alertBanner {
-                            HStack {
-                                Button { showAlerts = true; store.alertBanner = false } label: {
-                                    Label(L("Новая онлайн-запись"), systemImage: "calendar.badge.plus")
-                                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                Button { store.alertBanner = false } label: { Image(systemName: "xmark").frame(width: 44, height: 36) }
-                                    .accessibilityLabel(L("Закрыть"))
-                            }
-                        }
-                    }
-                        .padding(.horizontal, 20).padding(.vertical, 8)
-                        .background(TorlyTheme.surface)
-                        .overlay(alignment: .bottom) { Rectangle().fill(TorlyTheme.border).frame(height: 1) }
                 }
             }
         }
@@ -111,6 +85,36 @@ struct ContentView: View {
         .sheet(isPresented: $showAlerts) { notificationInbox }
     }
 
+    private var brandHeader: some View {
+                    VStack(spacing: 8) {
+                        HStack {
+                            TorlyBrand()
+                            Spacer()
+                            if store.busy { TorlyLoading(compact: true) }
+                            Button { showAlerts = true } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "bell")
+                                    let unread = store.alerts.filter { $0.readAt == nil }.count
+                                    if unread > 0 { TorlyNumber(value: "\(unread)", font: .subheadline) }
+                                }.font(.system(size: 20, weight: .semibold)).frame(minWidth: 48, minHeight: 48).contentShape(Rectangle())
+                            }.accessibilityLabel(L("Уведомления"))
+                        }
+                        if store.alertBanner {
+                            HStack {
+                                Button { showAlerts = true; store.alertBanner = false } label: {
+                                    Label(L("Новая онлайн-запись"), systemImage: "calendar.badge.plus")
+                                        .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                Button { store.alertBanner = false } label: { TorlyActionIcon(name: "xmark") }
+                                    .accessibilityLabel(L("Закрыть"))
+                            }
+                        }
+                    }
+                        .padding(.horizontal, 20).padding(.vertical, 8)
+                        .background(TorlyTheme.surface)
+                        .overlay(alignment: .bottom) { Rectangle().fill(TorlyTheme.border).frame(height: 1) }
+    }
+
     private var notificationInbox: some View {
         NavigationStack {
             TorlyList {
@@ -141,7 +145,7 @@ struct ContentView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(L("Новая онлайн-запись")).font(.body.weight(alert.readAt == nil ? .semibold : .regular))
                                 Text(store.businesses.first { $0.id == alert.businessId }?.name ?? "Torly")
-                                    .font(.caption).foregroundStyle(TorlyTheme.muted)
+                                    .font(.body.bold()).foregroundStyle(.white)
                             }
                             Spacer()
                             Image(systemName: "chevron.forward").font(.caption)
@@ -154,7 +158,7 @@ struct ContentView: View {
                     ToolbarItem(placement: .primaryAction) {
                         Button {
                             Task { await store.readAlerts(store.alerts.filter { $0.readAt == nil }.map(\.id)); store.alertBanner = false }
-                        } label: { Image(systemName: "checkmark.circle") }
+                        } label: { TorlyActionIcon(name: "checkmark.circle") }
                             .accessibilityLabel(L("Отметить прочитанными"))
                             .disabled(store.busy || !store.alerts.contains { $0.readAt == nil })
                     }
@@ -217,6 +221,7 @@ struct ContentView: View {
                 Section {
                     DatePicker(L("Дата"), selection: $store.day, displayedComponents: .date)
                         .datePickerStyle(.graphical)
+                        .fontWeight(.bold).foregroundStyle(TorlyTheme.accent)
                         .environment(\.timeZone, store.businessCalendar.timeZone)
                         .onChange(of: store.day) { _ in
                             Task { await store.perform { try await store.loadBookings() } }
@@ -236,9 +241,9 @@ struct ContentView: View {
                     ForEach(entries) { booking in bookingRow(booking) }
                 }
                 Section(L("Итоги дня")) {
-                    LabeledContent(L("Записей"), value: "\(store.bookings.filter { $0.kind == "booking" && $0.status != "cancelled" }.count)")
-                    LabeledContent(L("Завершено"), value: "\(store.bookings.filter { $0.kind == "booking" && $0.status == "completed" }.count)")
-                    LabeledContent(L("Стоимость завершённых услуг"), value: money(store.bookings.filter { $0.kind == "booking" && $0.status == "completed" }.reduce(0) { $0 + ($1.priceMinor ?? 0) }))
+                    TorlyValueRow(title: L("Записей"), value: "\(store.bookings.filter { $0.kind == "booking" && $0.status != "cancelled" }.count)")
+                    TorlyValueRow(title: L("Завершено"), value: "\(store.bookings.filter { $0.kind == "booking" && $0.status == "completed" }.count)")
+                    TorlyValueRow(title: L("Стоимость завершённых услуг"), value: money(store.bookings.filter { $0.kind == "booking" && $0.status == "completed" }.reduce(0) { $0 + ($1.priceMinor ?? 0) }))
                 }
                 Section {
                     Label(store.connected ? L("Календарь синхронизирован") : L("Переподключение…"),
@@ -255,7 +260,7 @@ struct ContentView: View {
                             .disabled(!(store.business?.services.contains(where: \.active) ?? false))
                         Button(L("Перерыв или отпуск"), systemImage: "pause.circle") { showBlock = true }
                             .disabled(store.business?.staff.isEmpty ?? true)
-                    } label: { Image(systemName: "plus") }.accessibilityLabel(L("Добавить"))
+                    } label: { TorlyActionIcon(name: "plus") }.accessibilityLabel(L("Добавить"))
                 }
             }
             .refreshable { await store.perform { try await store.reload() } }
@@ -265,8 +270,7 @@ struct ContentView: View {
     private func bookingRow(_ booking: RemoteBooking) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text("\(store.time(booking.startsAt)) – \(store.time(booking.endsAt))")
-                    .font(.headline).foregroundStyle(.tint)
+                TorlyNumber(value: "\(store.time(booking.startsAt)) – \(store.time(booking.endsAt))", font: .headline)
                 Spacer()
                 if ["pending", "confirmed"].contains(booking.status) {
                     Menu {
@@ -279,7 +283,7 @@ struct ContentView: View {
                             Button(L("Не пришёл")) { Task { await store.update(booking, status: "no_show") } }
                         }
                         Button(L("Отменить"), role: .destructive) { Task { await store.update(booking, status: "cancelled") } }
-                    } label: { Image(systemName: "ellipsis") }.accessibilityLabel(L("Действия с записью"))
+                    } label: { TorlyActionIcon(name: "ellipsis") }.accessibilityLabel(L("Действия с записью"))
                 }
             }
             Text(booking.clientName ?? (booking.kind == "time_off" ? L("Отпуск") : L("Перерыв"))).font(.headline)
@@ -301,8 +305,8 @@ struct ContentView: View {
                         ClientDetailForm(store: store, client: client)
                     } label: {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(client.name)
-                            Text(client.phone).font(.caption).foregroundStyle(TorlyTheme.muted)
+                            Text(client.name).font(.body.bold()).foregroundStyle(.white)
+                            TorlyNumber(value: client.phone, font: .subheadline)
                             if client.noShowCount > 0 {
                                 Label(L("Неявки: %d", client.noShowCount), systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(TorlyTheme.warning)
                             }
@@ -326,12 +330,13 @@ struct ContentView: View {
                     Button { editingService = service } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(service.name).foregroundStyle(.primary)
-                                Text(service.active ? L("%d мин", service.minutes ?? 0) : L("В архиве")).font(.caption).foregroundStyle(TorlyTheme.muted)
+                                Text(service.name).font(.body.bold()).foregroundStyle(.white)
+                                if service.active { TorlyNumber(value: L("%d мин", service.minutes ?? 0), font: .subheadline) }
+                                else { Text(L("В архиве")).font(.subheadline).foregroundStyle(TorlyTheme.muted) }
                             }
                             Spacer()
-                            if let price = service.priceMinor { Text(money(price)) }
-                            Image(systemName: "chevron.right").font(.caption)
+                            if let price = service.priceMinor { TorlyNumber(value: money(price)) }
+                            Image(systemName: "chevron.forward").font(.body.weight(.semibold))
                         }
                     }.swipeActions {
                         if service.active {
@@ -349,7 +354,7 @@ struct ContentView: View {
             }.navigationTitle(L("Услуги")).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button { showService = true } label: { Image(systemName: "plus") }.accessibilityLabel(L("Добавить услугу"))
+                        Button { showService = true } label: { TorlyActionIcon(name: "plus") }.accessibilityLabel(L("Добавить услугу"))
                     }
                 }
                 .refreshable { await store.perform { try await store.reload() } }
@@ -370,16 +375,16 @@ struct ContentView: View {
                 }
                 if let business = store.business {
                     Section {
-                        Text(business.name).font(.title2.bold()).foregroundStyle(.tint)
+                        Text(business.name).font(.title2.bold()).foregroundStyle(.white)
                         Label(business.address, systemImage: "mappin.and.ellipse")
-                        Label(business.phone, systemImage: "phone")
+                        Label { TorlyNumber(value: business.phone) } icon: { Image(systemName: "phone") }
                         Text(business.timezone).font(.caption).foregroundStyle(TorlyTheme.muted)
                         NavigationLink(L("Данные бизнеса")) { BusinessSetupForm(store: store, editing: true) }
                     }
                     Section(L("Команда и рабочие часы")) {
                         ForEach(business.staff) { staff in
                             NavigationLink { LiveHoursForm(store: store, staff: staff) } label: {
-                                Label(staff.name, systemImage: "person.crop.circle")
+                                Label(staff.name, systemImage: "person.crop.circle").font(.body.bold()).foregroundStyle(.white)
                             }
                         }
                         Button(L("Добавить сотрудника"), systemImage: "person.badge.plus") { showStaff = true }
@@ -480,7 +485,7 @@ private struct BusinessSetupForm: View {
             if editing || step == 0 {
                 Section(L("Бизнес")) {
                     TextField(L("Название бизнеса"), text: $name)
-                    TextField(L("Телефон с кодом страны"), text: $phone).keyboardType(.phonePad)
+                    TextField(L("Телефон с кодом страны"), text: $phone).keyboardType(.phonePad).font(.body.bold()).foregroundStyle(TorlyTheme.accent)
                     TextField(L("Адрес"), text: $address)
                     if !editing { TextField(L("Твоё имя"), text: $staffName) }
                 }
@@ -595,9 +600,9 @@ private struct HoursFields: View {
                 Toggle(dayNames[day], isOn: $open[day])
                 if open[day] {
                     HStack {
-                        TextField("09:00", text: $starts[day]).keyboardType(.numbersAndPunctuation)
+                        TextField("09:00", text: $starts[day]).keyboardType(.numbersAndPunctuation).font(.body.bold()).foregroundStyle(TorlyTheme.accent)
                         Text("–")
-                        TextField("17:00", text: $ends[day]).keyboardType(.numbersAndPunctuation)
+                        TextField("17:00", text: $ends[day]).keyboardType(.numbersAndPunctuation).font(.body.bold()).foregroundStyle(TorlyTheme.accent)
                     }
                 }
             }
@@ -658,9 +663,9 @@ private struct ClientDetailForm: View {
     var body: some View {
         TorlyForm {
             Section {
-                if let url = URL(string: "tel:\(client.phone)") { Link(client.phone, destination: url) }
-                LabeledContent(L("Завершённых визитов"), value: "\(client.visits)")
-                LabeledContent(L("Неявки"), value: "\(client.noShowCount)")
+                if let url = URL(string: "tel:\(client.phone)") { Link(destination: url) { TorlyNumber(value: client.phone) } }
+                TorlyValueRow(title: L("Завершённых визитов"), value: "\(client.visits)")
+                TorlyValueRow(title: L("Неявки"), value: "\(client.noShowCount)")
             }
             Section(L("Заметка")) { TextEditor(text: $note).frame(minHeight: 140) }
             if let message { Text(message) }

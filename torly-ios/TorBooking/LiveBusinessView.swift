@@ -411,8 +411,8 @@ struct LiveServiceForm: View {
         NavigationStack {
             TorlyForm {
                 TextField(L("Название"), text: $name)
-                TextField(L("Цена (%@)", store.business?.currency ?? "ILS"), text: $price).keyboardType(.decimalPad)
-                Stepper(L("%d мин", minutes), value: $minutes, in: 5...480, step: 5)
+                TextField(L("Цена (%@)", store.business?.currency ?? "ILS"), text: $price).keyboardType(.decimalPad).font(.body.bold()).foregroundStyle(TorlyTheme.accent)
+                Stepper(value: $minutes, in: 5...480, step: 5) { TorlyNumber(value: L("%d мин", minutes)) }
                 if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }
             .navigationTitle(L("Услуга"))
@@ -470,11 +470,11 @@ struct LiveBookingForm: View {
                 if loading { ProgressView() }
                 Picker(L("Время"), selection: $slot) {
                     Text(L("Выбрать")).tag("")
-                    ForEach(slots, id: \.self) { Text(store.time($0)).tag($0) }
+                    ForEach(slots, id: \.self) { Text(store.time($0)).bold().foregroundStyle(TorlyTheme.accent).tag($0) }
                 }
                 if !loading && slots.isEmpty { Text(L("Нет свободного времени")).foregroundStyle(TorlyTheme.muted) }
                 TextField(L("Имя клиента"), text: $name)
-                TextField(L("Телефон"), text: $phone).keyboardType(.phonePad)
+                TextField(L("Телефон"), text: $phone).keyboardType(.phonePad).font(.body.bold()).foregroundStyle(TorlyTheme.accent)
                 if let error { Text(error).foregroundStyle(TorlyTheme.danger) }
             }
             .disabled(saving)
@@ -533,9 +533,9 @@ struct LiveHoursForm: View {
                     Toggle(weekdays[day], isOn: $open[day])
                     if open[day] {
                         HStack {
-                            TextField(L("С"), text: $starts[day]).keyboardType(.numbersAndPunctuation)
+                            TextField(L("С"), text: $starts[day]).keyboardType(.numbersAndPunctuation).font(.body.bold()).foregroundStyle(TorlyTheme.accent)
                             Text("–")
-                            TextField(L("До"), text: $ends[day]).keyboardType(.numbersAndPunctuation)
+                            TextField(L("До"), text: $ends[day]).keyboardType(.numbersAndPunctuation).font(.body.bold()).foregroundStyle(TorlyTheme.accent)
                         }
                     }
                 }

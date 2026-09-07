@@ -55,10 +55,10 @@ struct TorlyBrand: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(uiImage: UIImage(named: "Torly-AppIcon-1024.png") ?? UIImage())
-                .resizable().scaledToFit().frame(width: 34, height: 34)
+                .resizable().scaledToFit().frame(width: 38, height: 38)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .accessibilityHidden(true)
-            Text("Torly").font(.system(.title2, design: .rounded, weight: .bold)).foregroundStyle(TorlyTheme.accent)
+            Text("Torly").font(.system(.title2, design: .rounded, weight: .bold)).foregroundStyle(.white)
         }.accessibilityElement(children: .combine)
     }
 }
@@ -334,6 +334,30 @@ struct AppSettings: View {
     }
 }
 
+struct TorlyNumber: View {
+    let value: String
+    var font: Font = .body
+    var body: some View {
+        Text(value).font(font.bold()).monospacedDigit().foregroundStyle(TorlyTheme.accent)
+    }
+}
+
+struct TorlyValueRow: View {
+    let title: String
+    let value: String
+    var body: some View {
+        LabeledContent { TorlyNumber(value: value) } label: { Text(title) }
+    }
+}
+
+struct TorlyActionIcon: View {
+    let name: String
+    var body: some View {
+        Image(systemName: name).font(.system(size: 20, weight: .semibold))
+            .frame(minWidth: 48, minHeight: 48).contentShape(Rectangle())
+    }
+}
+
 enum TorlyTheme {
     // sRGB equivalents of the published SaaS design's OKLCH palette.
     static let background = Color(hex: 0x050E18)
@@ -360,8 +384,8 @@ enum TorlyTheme {
         navigation.configureWithOpaqueBackground()
         navigation.backgroundColor = UIColor(surface)
         navigation.shadowColor = UIColor(border)
-        navigation.titleTextAttributes = [.foregroundColor: UIColor(text)]
-        navigation.largeTitleTextAttributes = [.foregroundColor: UIColor(text)]
+        navigation.titleTextAttributes = [.foregroundColor: UIColor.white, .font: UIFont.preferredFont(forTextStyle: .headline).withTraits(.traitBold)]
+        navigation.largeTitleTextAttributes = [.foregroundColor: UIColor.white, .font: UIFont.preferredFont(forTextStyle: .largeTitle).withTraits(.traitBold)]
         UINavigationBar.appearance().standardAppearance = navigation
         UINavigationBar.appearance().scrollEdgeAppearance = navigation
         UINavigationBar.appearance().compactAppearance = navigation
@@ -383,6 +407,12 @@ enum TorlyTheme {
     }
 }
 
+private extension UIFont {
+    func withTraits(_ traits: UIFontDescriptor.SymbolicTraits) -> UIFont {
+        UIFont(descriptor: fontDescriptor.withSymbolicTraits(traits) ?? fontDescriptor, size: pointSize)
+    }
+}
+
 private extension Color {
     init(hex: UInt32) {
         self.init(.sRGB, red: Double((hex >> 16) & 255) / 255,
@@ -393,6 +423,8 @@ private extension Color {
 private struct TorlySurface: ViewModifier {
     func body(content: Content) -> some View {
         content
+            .environment(\.defaultMinListRowHeight, 56)
+            .headerProminence(.increased)
             .scrollContentBackground(.hidden)
             .background(TorlyTheme.background.ignoresSafeArea())
             .foregroundColor(TorlyTheme.text)
@@ -431,7 +463,7 @@ struct TorlyPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity, minHeight: 24)
+            .frame(maxWidth: .infinity, minHeight: 30)
             .padding(12)
             .foregroundStyle(TorlyTheme.background)
             .background(TorlyTheme.accent.opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.35))
